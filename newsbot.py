@@ -288,6 +288,11 @@ def main():
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
 
+    if not a.dry_run and not env("SLACK_WEBHOOK_URL"):
+        # nowhere to post yet (Slack app still pending): don't burn model calls on items we can't deliver
+        log("SLACK_WEBHOOK_URL is not set, skipping this run")
+        return 0
+
     with open(os.path.join(ROOT, "feeds.json")) as f: feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
     with open(os.path.join(ROOT, "scope.md")) as f: scope = f.read()
     state = load_state()
