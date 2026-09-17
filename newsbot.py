@@ -149,10 +149,10 @@ def llm_decide(cands, scope, posted_titles):
     models = [m.strip() for m in env("LLM_MODEL", "gemini-flash-latest,gemini-2.5-flash").split(",") if m.strip()]
     style = env("LLM_API_STYLE", "anthropic" if "api.anthropic.com" in base else "openai")
     max_tokens = int(env("LLM_MAX_TOKENS", "8000"))
-    decisions = {}
-    for i in range(0, len(cands), BATCH):
-        chunk = cands[i:i + BATCH]
-        lines = "\n".join(json.dumps({"id": c["cid"], "source": c["source"], "kind": c["kind"],
+    batch = int(env("LLM_BATCH", "12"))
+
+    def ask(chunk):
+        lines = "\n".join(json.dumps({"id": c["cid"], "source": c["source"],
                                       "title": c["title"], "categories": c["categories"],
                                       "summary": c["summary"][:300]}, ensure_ascii=False) for c in chunk)
         prompt = PROMPT.format(scope=scope, posted="\n".join(posted_titles) or "(none)", candidates=lines)
@@ -162,20 +162,20 @@ def llm_decide(cands, scope, posted_titles):
                 url = base + "/messages"
                 headers = {"Content-Type": "application/json", "x-api-key": key,
                            "anthropic-version": "2023-06-01"}
-                body = json.dumps({"model": model, "max_tokens": max_tokens, "temperature": 0,
-                                   "messages": [{"role": "user", "content": prompt}]}).encode()
+                payload = {"model": model, "max_tokens": max_tokens, "temperature": 0,
+                           "messages": [{"role": "user", "content": prompt}]}
                 pick = lambda r: r["content"][0]["text"]
-            else:                      # OpenAI-compatible (Gemini, xAI, Groq, OpenRouter)
+            else:                      # OpenAI-compatible (Groq, Gemini, xAI, OpenRouter)
                 url = base + "/chat/completions"
                 headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
                 payload = {"model": model, "max_tokens": max_tokens, "temperature": 0,
                            "messages": [{"role": "user", "content": prompt}]}
                 if "gpt-oss" in model or "reasoning" in model:
                     payload["reasoning_effort"] = "low"   # these models think in tokens we pay for
-                body = json.dumps(payload).encode()
                 def pick(r):
                     m = r["choices"][0].get("message", {})
                     return m.get("content") or m.get("reasoning") or ""
+            body = json.dumps(payload).encode()
             for attempt in range(3):
                 try:
                     raw = http(url, data=body, timeout=120, headers=headers)
@@ -198,10 +198,19 @@ def llm_decide(cands, scope, posted_titles):
         parsed = extract_json(text)
         if parsed is None:
             raise RuntimeError(f"no JSON in the reply (model may have run out of tokens thinking): ...{text[-300:]}")
-        for d in parsed.get("decisions", []):
-            decisions[str(d.get("id"))] = d
-        missing = [c["cid"] for c in chunk if c["cid"] not in decisions]
-        if missing: raise RuntimeError(f"LLM skipped {len(missing)} candidates")
+        return {str(d.get("id")): d for d in parsed.get("decisions", []) if d.get("id")}
+
+    decisions = {}
+    for i in range(0, len(cands), batch):
+        chunk = cands[i:i + batch]
+        got = ask(chunk)
+        missing = [c for c in chunk if c["cid"] not in got]
+        if missing:                      # models sometimes answer for only part of a batch
+            log(f"retrying {len(missing)} candidates the model skipped")
+            got.update(ask(missing))
+            still = [c["cid"] for c in chunk if c["cid"] not in got]
+            if still: log(f"no decision after retry, leaving unposted: {', '.join(still)}")
+        decisions.update(got)
     return decisions
 
 def extract_json(text):
