@@ -47,12 +47,17 @@ Pick one. Volume is roughly 1.25M input and 30k output tokens a month.
 | Claude | `https://api.anthropic.com/v1` | `claude-haiku-4-5` | about $1.50 |
 | Claude, better judgment | `https://api.anthropic.com/v1` | `claude-sonnet-5` | about $3 |
 | xAI Grok | `https://api.x.ai/v1` | current id from the xAI console | about $3 |
+| Groq | `https://api.groq.com/openai/v1` | `openai/gpt-oss-20b,llama-3.1-8b-instant` | $0 on the free tier |
 
 The script detects the Claude API from its base URL and uses the native Messages endpoint. Everything else goes through the OpenAI-compatible path, which Gemini, xAI, Groq and OpenRouter all support.
 
 **For Gemini:** go to https://aistudio.google.com/apikey and click **Create API key** in a new project. Do not link a billing account to that project. Without billing it stays on the free tier and cannot be charged. Free-tier prompts may be used by Google to improve its products, and the bot sends public headlines plus `scope.md`.
 
+**For Groq:** sign up at https://console.groq.com with your work Google account, create an API key, and set `LLM_BASE_URL` and `LLM_MODEL` as repo variables in step 3. The free tier needs no card; a payment method is only required to go beyond it.
+
 **For Claude or xAI:** create a key in the provider console, add credits, and set `LLM_BASE_URL` and `LLM_MODEL` as repo variables in step 3.
+
+Note: Google Cloud asks for card details before it will create a project on a Workspace account, so the Gemini free tier is only realistic on a consumer Google account or once an admin provisions a Cloud project.
 
 ### 2. Slack webhook
 1. Create a test channel, for example `#news-bot-test`.
