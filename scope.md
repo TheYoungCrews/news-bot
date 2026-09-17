@@ -61,5 +61,6 @@ Skip:
 - "South Korean police charge 26 Polymarket users for illegal gambling"
 - "Group behind Revolut data breach demands $3 million in Monero"
 - "Crypto Long & Short: Six signs a crypto winter is ending"
+- "Clarity Act failure may hamper U.S. crypto as industry seeks legal clarity elsewhere" (analysis of a story already posted)
 - "Ethereum's upcoming Glamsterdam upgrade clears rehearsal"
 - "Zcash miner Fortitude names former Hut 8 chief CEO"
