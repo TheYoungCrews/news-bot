@@ -148,7 +148,7 @@ def llm_decide(cands, scope, posted_titles):
     if not key: raise RuntimeError("LLM_API_KEY is not set")
     models = [m.strip() for m in env("LLM_MODEL", "gemini-flash-latest,gemini-2.5-flash").split(",") if m.strip()]
     style = env("LLM_API_STYLE", "anthropic" if "api.anthropic.com" in base else "openai")
-    max_tokens = int(env("LLM_MAX_TOKENS", "8000"))
+    max_tokens = int(env("LLM_MAX_TOKENS", "2500"))   # also counts against Groq's tokens-per-minute limit
     batch = int(env("LLM_BATCH", "12"))
 
     def ask(chunk):
@@ -202,6 +202,7 @@ def llm_decide(cands, scope, posted_titles):
 
     decisions = {}
     for i in range(0, len(cands), batch):
+        if i: time.sleep(float(env("LLM_PACE_SECONDS", "5")))   # stay under the free tier's per-minute budget
         chunk = cands[i:i + batch]
         got = ask(chunk)
         missing = [c for c in chunk if c["cid"] not in got]
