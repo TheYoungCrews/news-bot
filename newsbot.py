@@ -168,11 +168,17 @@ def llm_decide(cands, scope, posted_titles):
                 headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
                 body = json.dumps({"model": model, "max_tokens": 2000, "temperature": 0,
                                    "messages": [{"role": "user", "content": prompt}]}).encode()
-                pick = lambda r: r["choices"][0]["message"]["content"]
+                def pick(r):
+                    m = r["choices"][0].get("message", {})
+                    return m.get("content") or m.get("reasoning") or ""
             for attempt in range(3):
                 try:
                     raw = http(url, data=body, timeout=120, headers=headers)
-                    text = pick(json.loads(raw))
+                    resp = json.loads(raw)
+                    text = (pick(resp) or "").strip()
+                    if not text:   # 200 with no usable content: show what came back
+                        last_err = f"{model}: empty reply {json.dumps(resp)[:300]}"
+                        text = None
                     break
                 except urllib.error.HTTPError as e:
                     last_err = f"{model}: HTTP {e.code} {e.read()[:200]!r}"
