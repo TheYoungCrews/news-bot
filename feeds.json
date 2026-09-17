@@ -1,0 +1,13 @@
+{
+  "_comment": "Set enabled=false to pause a source without deleting it.",
+  "feeds": [
+    {"name": "CoinDesk",      "kind": "news", "enabled": true,  "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
+    {"name": "The Block",     "kind": "news", "enabled": true,  "url": "https://www.theblock.co/rss.xml"},
+    {"name": "The Defiant",   "kind": "news", "enabled": true,  "url": "https://thedefiant.io/api/feed"},
+    {"name": "SEC",           "kind": "news", "enabled": true,  "url": "https://www.sec.gov/news/pressreleases.rss"},
+
+    {"name": "Unchained",     "kind": "news", "enabled": false, "url": "https://unchainedcrypto.com/feed/"},
+    {"name": "Cointelegraph", "kind": "news", "enabled": false, "url": "https://cointelegraph.com/rss"},
+    {"name": "Decrypt",       "kind": "news", "enabled": false, "url": "https://decrypt.co/feed"}
+  ]
+}

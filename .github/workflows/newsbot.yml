@@ -1,0 +1,65 @@
+name: news-bot
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"   # every 30 min; odd minutes dodge GitHub's top-of-hour backlog
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: print picks to the log, post nothing"
+        type: boolean
+        default: true
+      backfill_hours:
+        description: "Also evaluate items from the last N hours (0 = only new items)"
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: news-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load state from the bot-state branch
+        run: |
+          mkdir -p state
+          if git fetch --depth=1 origin bot-state 2>/dev/null; then
+            git show FETCH_HEAD:seen.json > state/seen.json || rm -f state/seen.json
+          fi
+
+      - name: Run bot
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          MAX_POSTS_PER_RUN: ${{ vars.MAX_POSTS_PER_RUN }}
+          UNFURL: ${{ vars.UNFURL }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          BACKFILL_HOURS: ${{ inputs.backfill_hours }}
+        run: |
+          ARGS=()
+          if [ "$DRY_RUN" = "true" ]; then ARGS+=(--dry-run); fi
+          if [[ "$BACKFILL_HOURS" =~ ^[0-9]+$ ]] && [ "$BACKFILL_HOURS" != "0" ]; then ARGS+=(--backfill-hours "$BACKFILL_HOURS"); fi
+          python3 newsbot.py "${ARGS[@]}"
+
+      - name: Save state to the bot-state branch
+        if: always() && inputs.dry_run != true && hashFiles('state/seen.json') != ''
+        run: |
+          cp state/seen.json /tmp/seen.json
+          git config user.name "news-bot"
+          git config user.email "news-bot@users.noreply.github.com"
+          git checkout --orphan bot-state-tmp
+          git rm -rf --cached . >/dev/null
+          cp /tmp/seen.json seen.json
+          git add seen.json
+          git commit -m "bot state" >/dev/null
+          git push --force origin HEAD:bot-state
