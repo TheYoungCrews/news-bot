@@ -10,6 +10,7 @@ Environment:
                       Claude: https://api.anthropic.com/v1   xAI: https://api.x.ai/v1
   LLM_MODEL           comma-separated, tried in order. default gemini-flash-latest,gemini-2.5-flash
   LLM_API_STYLE       openai or anthropic. Detected from LLM_BASE_URL, override only if needed
+  LLM_MAX_TOKENS      reply budget, default 8000 (thinking models need room before the JSON)
   CONTACT_EMAIL       optional, added to the User-Agent (SEC asks bots to identify themselves)
   MAX_POSTS_PER_RUN   default 8
   MAX_AGE_HOURS       ignore items older than this, default 36
@@ -147,6 +148,7 @@ def llm_decide(cands, scope, posted_titles):
     if not key: raise RuntimeError("LLM_API_KEY is not set")
     models = [m.strip() for m in env("LLM_MODEL", "gemini-flash-latest,gemini-2.5-flash").split(",") if m.strip()]
     style = env("LLM_API_STYLE", "anthropic" if "api.anthropic.com" in base else "openai")
+    max_tokens = int(env("LLM_MAX_TOKENS", "8000"))
     decisions = {}
     for i in range(0, len(cands), BATCH):
         chunk = cands[i:i + BATCH]
@@ -160,14 +162,17 @@ def llm_decide(cands, scope, posted_titles):
                 url = base + "/messages"
                 headers = {"Content-Type": "application/json", "x-api-key": key,
                            "anthropic-version": "2023-06-01"}
-                body = json.dumps({"model": model, "max_tokens": 2000, "temperature": 0,
+                body = json.dumps({"model": model, "max_tokens": max_tokens, "temperature": 0,
                                    "messages": [{"role": "user", "content": prompt}]}).encode()
                 pick = lambda r: r["content"][0]["text"]
             else:                      # OpenAI-compatible (Gemini, xAI, Groq, OpenRouter)
                 url = base + "/chat/completions"
                 headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
-                body = json.dumps({"model": model, "max_tokens": 2000, "temperature": 0,
-                                   "messages": [{"role": "user", "content": prompt}]}).encode()
+                payload = {"model": model, "max_tokens": max_tokens, "temperature": 0,
+                           "messages": [{"role": "user", "content": prompt}]}
+                if "gpt-oss" in model or "reasoning" in model:
+                    payload["reasoning_effort"] = "low"   # these models think in tokens we pay for
+                body = json.dumps(payload).encode()
                 def pick(r):
                     m = r["choices"][0].get("message", {})
                     return m.get("content") or m.get("reasoning") or ""
@@ -188,14 +193,50 @@ def llm_decide(cands, scope, posted_titles):
                     last_err = f"{model}: {e}"; time.sleep(3)
             if text: break
             log("model failed:", last_err)
-        if not text: raise RuntimeError(last_err or "LLM returned nothing")
-        m = re.search(r"\{.*\}", text, re.S)
-        if not m: raise RuntimeError(f"LLM reply was not JSON: {text[:200]}")
-        for d in json.loads(m.group(0)).get("decisions", []):
+        if not text:
+            raise RuntimeError(f"{last_err or 'LLM returned nothing'}{available_models(base, key, style)}")
+        parsed = extract_json(text)
+        if parsed is None:
+            raise RuntimeError(f"no JSON in the reply (model may have run out of tokens thinking): ...{text[-300:]}")
+        for d in parsed.get("decisions", []):
             decisions[str(d.get("id"))] = d
         missing = [c["cid"] for c in chunk if c["cid"] not in decisions]
         if missing: raise RuntimeError(f"LLM skipped {len(missing)} candidates")
     return decisions
+
+def extract_json(text):
+    """Pull the decisions object out of a reply that may be wrapped in prose or fences."""
+    for start in [m.start() for m in re.finditer(r"\{", text or "")]:
+        depth, in_str, esc = 0, False, False
+        for i in range(start, len(text)):
+            c = text[i]
+            if in_str:
+                if esc: esc = False
+                elif c == "\\": esc = True
+                elif c == '"': in_str = False
+                continue
+            if c == '"': in_str = True
+            elif c == "{": depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = json.loads(text[start:i + 1])
+                    except Exception:
+                        break
+                    if isinstance(obj, dict) and "decisions" in obj: return obj
+                    break
+    return None
+
+def available_models(base, key, style):
+    """On failure, ask the provider which models this key can use, to put in the log."""
+    if style == "anthropic": return ""
+    try:
+        raw = http(base + "/models", timeout=30, headers={"Authorization": f"Bearer {key}"})
+        ids = [m.get("id") for m in json.loads(raw).get("data", []) if m.get("id")]
+        return "  | models this key can use: " + ", ".join(sorted(ids)[:60])
+    except Exception as e:
+        return f"  | could not list models: {e}"
 
 def stub_decide(cands, scope, posted_titles):
     """Keyword stand-in for plumbing tests only. Not the real filter."""
