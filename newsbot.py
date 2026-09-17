@@ -139,7 +139,7 @@ Rules:
 - If several candidates cover the same story, post only one of them: prefer the most complete news outlet story, or the primary source (regulator or protocol forum) if no outlet covered it yet.
 - priority: 1 = major (a team member would be annoyed to miss it), 2 = relevant, 3 = marginal.
 - Reply with JSON only, no prose, in this shape:
-{{"decisions": [{{"id": "c1", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
+{{"decisions": [{{"id": "c1", "title_starts": "the first four words of that item's title", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
 """
 
 def llm_decide(cands, scope, posted_titles):
@@ -187,7 +187,7 @@ def llm_decide(cands, scope, posted_titles):
                     break
                 except urllib.error.HTTPError as e:
                     last_err = f"{model}: HTTP {e.code} {e.read()[:200]!r}"
-                    if e.code in (429, 500, 502, 503, 504): time.sleep(5 * (attempt + 1)); continue
+                    if e.code in (429, 500, 502, 503, 504): time.sleep(15 * (attempt + 1)); continue
                     break
                 except Exception as e:
                     last_err = f"{model}: {e}"; time.sleep(3)
@@ -198,7 +198,17 @@ def llm_decide(cands, scope, posted_titles):
         parsed = extract_json(text)
         if parsed is None:
             raise RuntimeError(f"no JSON in the reply (model may have run out of tokens thinking): ...{text[-300:]}")
-        return {str(d.get("id")): d for d in parsed.get("decisions", []) if d.get("id")}
+        out = {}
+        for d in parsed.get("decisions", []):
+            cid = str(d.get("id"))
+            c = next((x for x in chunk if x["cid"] == cid), None)
+            if not c: continue
+            echo = (d.get("title_starts") or "").strip().lower()[:18]
+            if echo and echo not in c["title"].lower():   # model mixed up which item it was judging
+                log(f"dropping mismatched decision for {cid}: {echo!r} is not in {c['title'][:50]!r}")
+                continue
+            out[cid] = d
+        return out
 
     decisions = {}
     for i in range(0, len(cands), batch):
@@ -208,6 +218,7 @@ def llm_decide(cands, scope, posted_titles):
         missing = [c for c in chunk if c["cid"] not in got]
         if missing:                      # models sometimes answer for only part of a batch
             log(f"retrying {len(missing)} candidates the model skipped")
+            time.sleep(float(env("LLM_PACE_SECONDS", "5")))
             got.update(ask(missing))
             still = [c["cid"] for c in chunk if c["cid"] not in got]
             if still: log(f"no decision after retry, leaving unposted: {', '.join(still)}")
