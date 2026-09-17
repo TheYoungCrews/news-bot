@@ -340,19 +340,19 @@ def main():
                 keep = bool(d.get("post")) and not d.get("duplicate")
                 if a.dry_run:
                     mark = "POST" if keep else "skip"
-                    print(f"[{mark}] p{d.get('priority','-')} {c['source']}: {c['title']}  -- {d.get('reason','')}")
+                    log(f"[{mark}] p{d.get('priority','-')} {c['source']}: {c['title']}  -- {d.get('reason','')}")
                 if keep: picks.append((int(d.get("priority") or 2), c))
                 else: state["seen"][c["id"]] = t
             picks.sort(key=lambda x: (x[0], x[1]["ts"]))
             cap = int(env("MAX_POSTS_PER_RUN", "8"))
             for _, c in picks[cap:]:
-                log(f"over cap, dropped: {c['title']}")
-                state["seen"][c["id"]] = t
+                # over the per-run cap: leave it unseen so the next run posts it, rather than losing it
+                log(f"over cap, held for next run: {c['title']}")
             picks = [c for _, c in picks[:cap]]
             picks.sort(key=lambda c: c["ts"])
 
     if a.dry_run:
-        print(f"\n{len(picks)} would post, {len(cands) - len(picks)} filtered out.")
+        log(f"{len(picks)} would post, {len(cands) - len(picks)} filtered out or held.")
         return 0
 
     for c in picks:
