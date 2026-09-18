@@ -2,7 +2,10 @@ name: news-bot
 
 on:
   schedule:
-    - cron: "7,37 * * * *"   # every 30 min; odd minutes dodge GitHub's top-of-hour backlog
+    # times are UTC. 12:00-23:59 UTC covers 8am-7pm ET in summer, 7am-6pm ET in winter.
+    - cron: "2,17,32,47 12-23 * * 1-5"   # weekdays, business hours: every 15 min
+    - cron: "2 0-11/2 * * 1-5"           # weekdays, overnight: every 2 hours
+    - cron: "2 */2 * * 0,6"              # weekends: every 2 hours
   workflow_dispatch:
     inputs:
       dry_run:
@@ -40,9 +43,24 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_MAX_TOKENS: ${{ vars.LLM_MAX_TOKENS }}
           CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          # operations: unset variables fall back to the defaults in newsbot.py
+          ALERT_USER: ${{ vars.ALERT_USER }}
+          START_POSTING_AT: ${{ vars.START_POSTING_AT }}
+          PAUSED: ${{ vars.PAUSED }}
+          # volume
           MAX_POSTS_PER_RUN: ${{ vars.MAX_POSTS_PER_RUN }}
+          MAX_POSTS_PER_DAY: ${{ vars.MAX_POSTS_PER_DAY }}
+          MAX_POSTS_PER_WEEKEND_DAY: ${{ vars.MAX_POSTS_PER_WEEKEND_DAY }}
+          MAX_PRIORITY: ${{ vars.MAX_PRIORITY }}
+          DUPE_THRESHOLD: ${{ vars.DUPE_THRESHOLD }}
+          MAX_AGE_HOURS: ${{ vars.MAX_AGE_HOURS }}
+          # appearance
           UNFURL: ${{ vars.UNFURL }}
+          PREVIEW: ${{ vars.PREVIEW }}
+          IMAGE_STYLE: ${{ vars.IMAGE_STYLE }}
+          CARD_COLOR: ${{ vars.CARD_COLOR }}
           DRY_RUN: ${{ inputs.dry_run }}
           BACKFILL_HOURS: ${{ inputs.backfill_hours }}
         run: |
