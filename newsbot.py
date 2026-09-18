@@ -10,7 +10,7 @@ Environment:
                       Claude: https://api.anthropic.com/v1   xAI: https://api.x.ai/v1
   LLM_MODEL           comma-separated, tried in order. default gemini-flash-latest,gemini-2.5-flash
   LLM_API_STYLE       openai or anthropic. Detected from LLM_BASE_URL, override only if needed
-  LLM_MAX_TOKENS      reply budget, default 8000 (thinking models need room before the JSON)
+  LLM_MAX_TOKENS      reply budget, default 2500 (thinking models need room before the JSON)
   CONTACT_EMAIL       optional, added to the User-Agent (SEC asks bots to identify themselves)
   MAX_POSTS_PER_RUN   default 2
   MAX_POSTS_PER_DAY   default 8 (rolling 24h), MAX_POSTS_PER_WEEKEND_DAY default 3
@@ -19,12 +19,13 @@ Environment:
   MAX_AGE_HOURS       ignore items older than this, default 36
   ALERT_USER          Slack member ID to tag when something breaks, e.g. U01234567
   START_POSTING_AT    ISO date/time (ET) before which the bot reads feeds but posts nothing
+  PAUSED              "true" to stop the bot posting at all (kill switch, no code change)
   UNFURL              "true" to let Slack unfurl links itself, default false (we build the card)
   PREVIEW             card (default) or plain, to post the bare headline + link line
   IMAGE_STYLE         large (default) or thumb
   CARD_COLOR          left bar colour, default #2FFAE2
 """
-import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
+import argparse, hashlib, html, json, os, re, sys, time, traceback, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -37,6 +38,7 @@ SEEN_TTL = 14 * 86400
 POSTED_TTL = 7 * 86400
 LLM_ALERT_AFTER = 3        # consecutive failed runs before a Slack warning
 FEED_ALERT_AFTER = 24      # consecutive failed runs (12h at 30 min) before a Slack warning
+ALERT_COOLDOWN = 12 * 3600 # don't repeat the same warning more often than this
 BATCH = 40
 
 def log(*a): print(*a, file=sys.stderr, flush=True)
@@ -317,6 +319,17 @@ def preview_card(c):
         card["thumb_url" if env("IMAGE_STYLE", "large").lower() == "thumb" else "image_url"] = c["image"]
     return card
 
+def should_alert(state, key, t):
+    """True the first time a problem shows up, then at most once every ALERT_COOLDOWN.
+
+    Without this a broken key alerts once and then goes quiet forever, which looks
+    exactly like a bot that is working.
+    """
+    last = state.setdefault("alerts", {}).get(key, 0)
+    if t - last < ALERT_COOLDOWN: return False
+    state["alerts"][key] = t
+    return True
+
 def alert(msg):
     """Post a human-readable problem report, tagging whoever owns the bot."""
     who = env("ALERT_USER")                      # a Slack member ID, e.g. U01234567
@@ -342,7 +355,7 @@ def slack_post(text, card=None):
 
 # ---------- main ----------
 
-def main():
+def _run():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="print picks, do not post or save state")
     ap.add_argument("--backfill-hours", type=float, default=0, help="evaluate items from the last N hours even if already seen")
@@ -351,6 +364,11 @@ def main():
     a = ap.parse_args()
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
+
+    if env("PAUSED", "").lower() in ("1", "true", "yes"):
+        # kill switch: set the PAUSED repo variable to stop posting without touching code
+        log("PAUSED is set, doing nothing this run")
+        return 0
 
     start_at = env("START_POSTING_AT")           # e.g. 2026-09-21T08:00 (ET); quiet until then
     holding = False
@@ -374,6 +392,7 @@ def main():
     first_run = (state is None and not a.backfill_hours) or holding
     state = state or {"seen": {}, "posted": [], "llm_failures": 0, "feed_failures": {}, "alerts": {}}
     alerts = []
+    t = now()
 
     items = []
     for feed in feeds:
@@ -391,11 +410,10 @@ def main():
             n = state["feed_failures"].get(feed["name"], 0) + 1
             state["feed_failures"][feed["name"]] = n
             log(f"{feed['name']}: FAILED ({n} runs) {e}")
-            if n == FEED_ALERT_AFTER:
+            if n >= FEED_ALERT_AFTER and should_alert(state, "feed:" + feed["name"], t):
                 alerts.append(f"The {feed['name']} feed has been failing for {n} runs "
                               f"(about 12 hours). Other sources are still posting. Error: {str(e)[:140]}")
 
-    t = now()
     max_age = float(env("MAX_AGE_HOURS", "36")) * 3600
     window = a.backfill_hours * 3600 if a.backfill_hours else max_age
     uniq = {}
@@ -424,7 +442,7 @@ def main():
         except Exception as e:
             state["llm_failures"] += 1
             log(f"LLM filter FAILED ({state['llm_failures']} runs): {e}")
-            if state["llm_failures"] == LLM_ALERT_AFTER:
+            if state["llm_failures"] >= LLM_ALERT_AFTER and should_alert(state, "llm", t):
                 alerts.append(f"The filter has failed {LLM_ALERT_AFTER} runs in a row, so nothing is posting "
                               f"and stories are queueing up. Usually a bad or rate-limited model key. "
                               f"Error: {str(e)[:160]}")
@@ -498,6 +516,17 @@ def main():
         alert(msg)
     save_state(state)
     return 1 if state["llm_failures"] else 0
+
+def main():
+    """Never let a crash be silent: GitHub turns the run red, Slack gets a name to tag."""
+    try:
+        return _run()
+    except SystemExit:
+        raise
+    except Exception as e:
+        log(traceback.format_exc())
+        alert(f"The run crashed before posting anything: `{type(e).__name__}: {str(e)[:200]}`")
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
