@@ -24,6 +24,12 @@ Environment:
   PREVIEW             card (default) or plain, to post the bare headline + link line
   IMAGE_STYLE         large (default) or thumb
   CARD_COLOR          left bar colour, default #2FFAE2
+  SLACK_BOT_TOKEN     opt-in. When set, stories post via the Web API (chat.postMessage) so the
+                      bot can seed 👍/👎 reactions and read them back next run into feedback.jsonl,
+                      nudging source ranking. Needs scopes chat:write, reactions:write, reactions:read.
+                      Unset (default): posts via the webhook exactly as before, just the footer prompt.
+  SLACK_CHANNEL_ID    channel for the Web API path, e.g. C0123456789. Required when SLACK_BOT_TOKEN
+                      is set; if missing the bot warns and falls back to the webhook.
 """
 import argparse, hashlib, html, json, os, re, sys, time, traceback, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
@@ -33,12 +39,16 @@ from urllib.parse import urlsplit, urlunsplit
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATE_PATH = os.path.join(ROOT, "state", "seen.json")
+FEEDBACK_LOG = os.path.join(ROOT, "state", "feedback.jsonl")   # append-only tally log, kept on bot-state
 EASTERN = timezone(timedelta(hours=-4))     # the team's clock, for the weekend rule
 SEEN_TTL = 14 * 86400
 POSTED_TTL = 7 * 86400
 LLM_ALERT_AFTER = 3        # consecutive failed runs before a Slack warning
 FEED_ALERT_AFTER = 24      # consecutive failed runs (12h at 30 min) before a Slack warning
 ALERT_COOLDOWN = 12 * 3600 # don't repeat the same warning more often than this
+FEEDBACK_WINDOW = 48 * 3600  # collect reactions this long before finalizing a story's score
+FB_PENDING_MAX = 200         # cap the in-flight message map so state can't grow unbounded
+FEEDBACK_FOOTER = "👍 relevant · 👎 not relevant · 💬 reply to flag"
 BATCH = 40
 
 def log(*a): print(*a, file=sys.stderr, flush=True)
@@ -313,7 +323,8 @@ def preview_card(c):
     if env("PREVIEW", "card").lower() == "plain": return None
     card = {"color": env("CARD_COLOR", "#2FFAE2"),
             "title": c["title"], "title_link": c["url"],
-            "footer": c["source"], "fallback": f"{c['title']} - {c['source']}"}
+            # source stays, plus a quiet prompt inviting the reactions the feedback loop reads
+            "footer": f"{c['source']} · {FEEDBACK_FOOTER}", "fallback": f"{c['title']} - {c['source']}"}
     if c.get("summary"): card["text"] = c["summary"][:280]
     if c.get("image"):
         card["thumb_url" if env("IMAGE_STYLE", "large").lower() == "thumb" else "image_url"] = c["image"]
@@ -353,6 +364,108 @@ def slack_post(text, card=None):
     http(url, data=body, headers={"Content-Type": "application/json"}, timeout=20)
     time.sleep(1.1)  # Slack allows about 1 message per second per webhook
 
+# ---------- community feedback (opt-in, needs SLACK_BOT_TOKEN) ----------
+#
+# When SLACK_BOT_TOKEN + SLACK_CHANNEL_ID are set the bot posts each story with the
+# Web API instead of the webhook, seeds 👍/👎 so people just click, and remembers the
+# message. A couple of days later it reads the reactions back, folds a net score into a
+# per-source tally, and lets that tally break ties between same-priority stories. With no
+# token everything below is skipped and posting is exactly the webhook path as before.
+
+def feedback_config():
+    """Return (token, channel) only when the opt-in path is fully configured, else (None, None)."""
+    token = env("SLACK_BOT_TOKEN")
+    if not token: return None, None
+    channel = env("SLACK_CHANNEL_ID")
+    if not channel:
+        log("SLACK_BOT_TOKEN is set but SLACK_CHANNEL_ID is missing; falling back to the webhook")
+        return None, None
+    return token, channel
+
+def slack_api(method, token, payload):
+    """Call a Slack Web API method and return the parsed response ({'ok': bool, ...})."""
+    raw = http("https://slack.com/api/" + method, data=json.dumps(payload).encode(),
+               headers={"Content-Type": "application/json; charset=utf-8",
+                        "Authorization": f"Bearer {token}"}, timeout=20)
+    time.sleep(1.1)  # same per-second courtesy as the webhook
+    return json.loads(raw)
+
+def tally_reactions(resp):
+    """Count 👍 and 👎 on a message from a reactions.get response."""
+    reactions = (resp.get("message") or {}).get("reactions", [])
+    up = sum(r.get("count", 0) for r in reactions if r.get("name") in ("+1", "thumbsup"))
+    down = sum(r.get("count", 0) for r in reactions if r.get("name") in ("-1", "thumbsdown"))
+    return up, down
+
+def append_feedback_log(records):
+    """Append finalized per-story tallies to feedback.jsonl (persisted on the bot-state branch)."""
+    os.makedirs(os.path.dirname(FEEDBACK_LOG), exist_ok=True)
+    with open(FEEDBACK_LOG, "a") as f:
+        for r in records:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+def collect_feedback(state, token, channel, t):
+    """Read reactions on recent posts; finalize any old enough and score their source.
+
+    Each post is seeded with one 👍 and one 👎 by the bot, so those two are subtracted
+    before scoring. A story is finalized once it is older than FEEDBACK_WINDOW; until then
+    it stays pending so late reactions still count.
+    """
+    pending = state.get("fb_pending", [])
+    if not pending: return
+    keep, finalized = [], []
+    for m in pending:
+        try:
+            resp = slack_api("reactions.get", token, {"channel": m["channel"], "timestamp": m["ts"]})
+        except Exception as e:
+            log(f"reactions.get failed for {m['ts']}: {e}"); keep.append(m); continue
+        if not resp.get("ok"):
+            log(f"reactions.get: {resp.get('error')}")
+            # drop messages Slack can no longer find; keep transient errors for a retry
+            if resp.get("error") not in ("message_not_found", "channel_not_found"): keep.append(m)
+            continue
+        if t - m["posted_at"] < FEEDBACK_WINDOW:
+            keep.append(m); continue
+        up, down = tally_reactions(resp)
+        up, down = max(0, up - 1), max(0, down - 1)   # remove the bot's own seed reactions
+        net = up - down
+        finalized.append({"ts": m["ts"], "url": m["url"], "source": m["source"],
+                          "title": m["title"], "up": up, "down": down, "net": net, "at": t})
+        scores = state.setdefault("source_scores", {})
+        scores[m["source"]] = scores.get(m["source"], 0) + net
+    state["fb_pending"] = keep[-FB_PENDING_MAX:]
+    if finalized:
+        append_feedback_log(finalized)
+        log(f"feedback: finalized {len(finalized)} stories")
+
+def source_bonus(state, source):
+    """Net feedback for a source, clamped so it only ever breaks ties between same-priority
+    stories — it can never lift a marginal story above a more important one."""
+    return max(-3, min(3, state.get("source_scores", {}).get(source, 0)))
+
+def post_story(c, text, card, token, channel, state, t):
+    """Post one story. Web API path when opted in (so reactions can be tracked), else webhook."""
+    if not (token and channel):
+        slack_post(text, card)
+        return
+    resp = slack_api("chat.postMessage", token,
+                     {"channel": channel, "text": text,
+                      "attachments": [card] if card else [],
+                      "unfurl_links": False, "unfurl_media": False})   # the card is the preview
+    if not resp.get("ok"):
+        raise RuntimeError(f"chat.postMessage: {resp.get('error')}")
+    ts = resp.get("ts")
+    for name in ("+1", "-1"):   # seed both so a reaction is a single click
+        try:
+            r = slack_api("reactions.add", token, {"channel": channel, "timestamp": ts, "name": name})
+            if not r.get("ok") and r.get("error") != "already_reacted":
+                log(f"reactions.add {name}: {r.get('error')}")
+        except Exception as e:
+            log(f"reactions.add {name} failed: {e}")
+    state.setdefault("fb_pending", []).append(
+        {"ts": ts, "channel": channel, "url": c["url"], "source": c["source"],
+         "title": c["title"], "posted_at": t})
+
 # ---------- main ----------
 
 def _run():
@@ -381,9 +494,11 @@ def _run():
         except ValueError:
             log(f"START_POSTING_AT is not a date I understand: {start_at!r}")
 
-    if not a.dry_run and not env("SLACK_WEBHOOK_URL"):
-        # nowhere to post yet (Slack app still pending): don't burn model calls on items we can't deliver
-        log("SLACK_WEBHOOK_URL is not set, skipping this run")
+    # nowhere to post yet (Slack app still pending): don't burn model calls on items we can't deliver.
+    # the Web API path (SLACK_BOT_TOKEN + SLACK_CHANNEL_ID) is a valid destination on its own.
+    can_api = bool(env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID"))
+    if not a.dry_run and not env("SLACK_WEBHOOK_URL") and not can_api:
+        log("no Slack destination set (need SLACK_WEBHOOK_URL, or SLACK_BOT_TOKEN + SLACK_CHANNEL_ID), skipping this run")
         return 0
 
     with open(os.path.join(ROOT, "feeds.json")) as f: feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
@@ -393,6 +508,11 @@ def _run():
     state = state or {"seen": {}, "posted": [], "llm_failures": 0, "feed_failures": {}, "alerts": {}}
     alerts = []
     t = now()
+
+    # opt-in: read reactions on earlier posts before ranking, so scores are current
+    fb_token, fb_channel = feedback_config()
+    if fb_token and not a.dry_run:
+        collect_feedback(state, fb_token, fb_channel, t)
 
     items = []
     for feed in feeds:
@@ -460,7 +580,10 @@ def _run():
                     keep = False
                 if keep: picks.append((pr, c))
                 else: state["seen"][c["id"]] = t
-            picks.sort(key=lambda x: (x[0], x[1]["ts"]))
+            # priority still dominates; a source's feedback score (0 unless the opt-in loop has run)
+            # only orders stories of equal priority, nudging well-received sources ahead when a
+            # per-run or daily cap trims the list. It never crosses a priority boundary.
+            picks.sort(key=lambda x: (x[0], -source_bonus(state, x[1]["source"]), x[1]["ts"]))
             # the model only sees one batch at a time, so catch duplicates across batches here
             deduped = []
             for _, c in picks:
@@ -505,8 +628,8 @@ def _run():
 
     for c in picks:
         try:
-            slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
-                       card=preview_card(c))
+            text = f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}"
+            post_story(c, text, preview_card(c), fb_token, fb_channel, state, t)
             state["seen"][c["id"]] = t
             state["posted"].append({"title": c["title"], "source": c["source"], "url": c["url"], "at": t})
             log(f"posted: {c['title']}")
