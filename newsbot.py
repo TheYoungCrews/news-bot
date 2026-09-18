@@ -12,7 +12,10 @@ Environment:
   LLM_API_STYLE       openai or anthropic. Detected from LLM_BASE_URL, override only if needed
   LLM_MAX_TOKENS      reply budget, default 8000 (thinking models need room before the JSON)
   CONTACT_EMAIL       optional, added to the User-Agent (SEC asks bots to identify themselves)
-  MAX_POSTS_PER_RUN   default 8
+  MAX_POSTS_PER_RUN   default 2
+  MAX_POSTS_PER_DAY   default 8 (rolling 24h), MAX_POSTS_PER_WEEKEND_DAY default 3
+  MAX_PRIORITY        highest priority number allowed through, default 2 (3 = marginal, never posts)
+  DUPE_THRESHOLD      title-overlap cut for same-story detection, default 0.42
   MAX_AGE_HOURS       ignore items older than this, default 36
   UNFURL              "true" to let Slack unfurl links itself, default false (we build the card)
   PREVIEW             card (default) or plain, to post the bare headline + link line
@@ -21,14 +24,15 @@ Environment:
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit, urlunsplit
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATE_PATH = os.path.join(ROOT, "state", "seen.json")
+EASTERN = timezone(timedelta(hours=-4))     # the team's clock, for the weekend rule
 SEEN_TTL = 14 * 86400
-POSTED_TTL = 4 * 86400
+POSTED_TTL = 7 * 86400
 LLM_ALERT_AFTER = 3        # consecutive failed runs before a Slack warning
 FEED_ALERT_AFTER = 24      # consecutive failed runs (12h at 30 min) before a Slack warning
 BATCH = 40
@@ -150,7 +154,9 @@ Candidate items, one JSON object per line:
 Rules:
 - Decide for every candidate.
 - If several candidates cover the same story, post only one of them: prefer the most complete news outlet story, or the primary source (regulator or protocol forum) if no outlet covered it yet.
-- priority: 1 = major (a team member would be annoyed to miss it), 2 = relevant, 3 = marginal.
+- priority: 1 = major (a team member would be annoyed to miss it), 2 = clearly relevant, 3 = marginal.
+  Only 1 and 2 ever get posted, and the channel has room for about 5-8 posts a DAY in total, so be strict.
+- Skip anything that continues a story thread already in <already_posted>, unless it adds a material new fact.
 - Reply with JSON only, no prose, in this shape:
 {{"decisions": [{{"id": "c1", "title_starts": "the first four words of that item's title", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
 """
@@ -237,6 +243,18 @@ def llm_decide(cands, scope, posted_titles):
             if still: log(f"no decision after retry, leaving unposted: {', '.join(still)}")
         decisions.update(got)
     return decisions
+
+STOP = {"the","and","for","with","from","that","this","says","after","into","over","amid",
+        "what","will","plans","could","more","than","its","their","about","ahead","without"}
+
+def title_words(t):
+    return {w for w in re.findall(r"[a-z0-9]{4,}", (t or "").lower()) if w not in STOP}
+
+def title_overlap(a, b):
+    """Rough same-story test: shared significant words over the shorter title."""
+    wa, wb = title_words(a), title_words(b)
+    if not wa or not wb: return 0.0
+    return len(wa & wb) / min(len(wa), len(wb))
 
 def extract_json(text):
     """Pull the decisions object out of a reply that may be wrapped in prose or fences."""
@@ -389,14 +407,49 @@ def main():
                 if a.dry_run:
                     mark = "POST" if keep else "skip"
                     log(f"[{mark}] p{d.get('priority','-')} {c['source']}: {c['title']}  -- {d.get('reason','')}")
-                if keep: picks.append((int(d.get("priority") or 2), c))
+                pr = int(d.get("priority") or 2)
+                if keep and pr > int(env("MAX_PRIORITY", "2")):
+                    log(f"priority {pr}, below the bar: {c['title']}")
+                    keep = False
+                if keep: picks.append((pr, c))
                 else: state["seen"][c["id"]] = t
             picks.sort(key=lambda x: (x[0], x[1]["ts"]))
-            cap = int(env("MAX_POSTS_PER_RUN", "8"))
-            for _, c in picks[cap:]:
+            # the model only sees one batch at a time, so catch duplicates across batches here
+            deduped = []
+            for _, c in picks:
+                twin = next((k for k in deduped
+                             if title_overlap(c["title"], k["title"]) >= float(env("DUPE_THRESHOLD", "0.42"))), None)
+                if twin:
+                    log(f"same story as {twin['source']}'s, dropping: {c['title']}")
+                    state["seen"][c["id"]] = t
+                    continue
+                deduped.append(c)
+            # don't repeat a story we already posted in the last week
+            recent = [p["title"] for p in state["posted"]]
+            fresh = []
+            for c in deduped:
+                twin = next((r for r in recent if title_overlap(c["title"], r) >= float(env("DUPE_THRESHOLD", "0.42"))), None)
+                if twin:
+                    log(f"already covered this week, dropping: {c['title']}")
+                    state["seen"][c["id"]] = t
+                    continue
+                fresh.append(c)
+            deduped = fresh
+
+            # daily budget: weekends are quieter, and a single run never floods the channel
+            weekend = datetime.fromtimestamp(t, timezone.utc).astimezone(EASTERN).weekday() >= 5
+            day_cap = int(env("MAX_POSTS_PER_WEEKEND_DAY", "3") if weekend else env("MAX_POSTS_PER_DAY", "8"))
+            posted_today = sum(1 for p in state["posted"] if t - p["at"] < 86400)
+            room = max(0, day_cap - posted_today)
+            if room < len(deduped):
+                log(f"daily budget: {posted_today}/{day_cap} posted in the last 24h, room for {room}")
+            deduped = deduped[:room]
+
+            cap = int(env("MAX_POSTS_PER_RUN", "2"))
+            for c in deduped[cap:]:
                 # over the per-run cap: leave it unseen so the next run posts it, rather than losing it
                 log(f"over cap, held for next run: {c['title']}")
-            picks = [c for _, c in picks[:cap]]
+            picks = deduped[:cap]
             picks.sort(key=lambda c: c["ts"])
 
     if a.dry_run:
