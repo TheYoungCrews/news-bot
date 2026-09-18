@@ -76,6 +76,9 @@ Note: Google Cloud asks for card details before it will create a project on a Wo
    - `LLM_BASE_URL` and `LLM_MODEL`: only if you are not using Gemini. `LLM_MODEL` takes a comma-separated list and falls back in order.
    - `MAX_POSTS_PER_RUN`: defaults to 8, a safety cap
    - `UNFURL`: set `true` to show link previews. Off by default to keep the channel compact.
+   - `SLACK_CHANNEL_ID`: only for the community-feedback loop below, e.g. `C0123456789`.
+
+   For the opt-in **community feedback** loop, also add a secret `SLACK_BOT_TOKEN` (a Slack bot token with scopes `chat:write`, `reactions:write`, `reactions:read`) and set `SLACK_CHANNEL_ID`. With both set, the bot posts each story via the Web API, seeds 👍/👎 so people react in one click, and reads those reactions back a couple of days later into `feedback.jsonl` (kept on the `bot-state` branch), using a per-source score to nudge ranking. Leave `SLACK_BOT_TOKEN` unset and posting is exactly as before (webhook), just with a 👍/👎 prompt in each card's footer. See `CONTRIBUTING.md`.
 
 ### 4. Check the filter before anything posts
 1. Go to **Actions > news-bot > Run workflow**. Leave **Dry run** checked and set **backfill_hours** to `24`.

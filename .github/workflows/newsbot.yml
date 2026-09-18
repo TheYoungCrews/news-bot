@@ -35,6 +35,7 @@ jobs:
           mkdir -p state
           if git fetch --depth=1 origin bot-state 2>/dev/null; then
             git show FETCH_HEAD:seen.json > state/seen.json || rm -f state/seen.json
+            git show FETCH_HEAD:feedback.jsonl > state/feedback.jsonl 2>/dev/null || rm -f state/feedback.jsonl
           fi
 
       - name: Run bot
@@ -61,6 +62,9 @@ jobs:
           PREVIEW: ${{ vars.PREVIEW }}
           IMAGE_STYLE: ${{ vars.IMAGE_STYLE }}
           CARD_COLOR: ${{ vars.CARD_COLOR }}
+          # community feedback (opt-in; unset = webhook posting exactly as before)
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
           DRY_RUN: ${{ inputs.dry_run }}
           BACKFILL_HOURS: ${{ inputs.backfill_hours }}
         run: |
@@ -73,11 +77,14 @@ jobs:
         if: always() && inputs.dry_run != true && hashFiles('state/seen.json') != ''
         run: |
           cp state/seen.json /tmp/seen.json
+          [ -f state/feedback.jsonl ] && cp state/feedback.jsonl /tmp/feedback.jsonl || true
           git config user.name "news-bot"
           git config user.email "news-bot@users.noreply.github.com"
           git checkout --orphan bot-state-tmp
           git rm -rf --cached . >/dev/null
           cp /tmp/seen.json seen.json
+          [ -f /tmp/feedback.jsonl ] && cp /tmp/feedback.jsonl feedback.jsonl || true
           git add seen.json
+          [ -f feedback.jsonl ] && git add feedback.jsonl || true
           git commit -m "bot state" >/dev/null
           git push --force origin HEAD:bot-state
