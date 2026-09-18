@@ -75,7 +75,7 @@ Note: Google Cloud asks for card details before it will create a project on a Wo
    - `CONTACT_EMAIL`: added to the bot's User-Agent. SEC.gov asks automated clients to identify themselves.
    - `LLM_BASE_URL` and `LLM_MODEL`: only if you are not using Gemini. `LLM_MODEL` takes a comma-separated list and falls back in order.
    - `MAX_POSTS_PER_RUN`: defaults to 8, a safety cap
-   - `UNFURL`: set `true` to show link previews. Off by default to keep the channel compact.
+   - `UNFURL`: link previews are on by default. Set `false` to turn them off and keep the channel compact.
 
 ### 4. Check the filter before anything posts
 1. Go to **Actions > news-bot > Run workflow**. Leave **Dry run** checked and set **backfill_hours** to `24`.

@@ -14,7 +14,7 @@ Environment:
   CONTACT_EMAIL       optional, added to the User-Agent (SEC asks bots to identify themselves)
   MAX_POSTS_PER_RUN   default 8
   MAX_AGE_HOURS       ignore items older than this, default 36
-  UNFURL              "true" to let Slack show link previews, default false
+  UNFURL              "false" to turn off Slack link previews, default true
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
@@ -271,7 +271,7 @@ def slack_escape(s): return s.replace("&", "&amp;").replace("<", "&lt;").replace
 def slack_post(text):
     url = env("SLACK_WEBHOOK_URL")
     if not url: raise RuntimeError("SLACK_WEBHOOK_URL is not set")
-    unfurl = env("UNFURL", "false").lower() == "true"
+    unfurl = env("UNFURL", "true").lower() == "true"
     body = json.dumps({"text": text, "unfurl_links": unfurl, "unfurl_media": unfurl}).encode()
     http(url, data=body, headers={"Content-Type": "application/json"}, timeout=20)
     time.sleep(1.1)  # Slack allows about 1 message per second per webhook
@@ -374,7 +374,7 @@ def main():
 
     for c in picks:
         try:
-            slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}")
+            slack_post(f"{slack_escape(c['title'])} · {slack_escape(c['source'])}\n{c['url']}")
             state["seen"][c["id"]] = t
             state["posted"].append({"title": c["title"], "source": c["source"], "url": c["url"], "at": t})
             log(f"posted: {c['title']}")
