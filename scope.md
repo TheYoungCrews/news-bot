@@ -6,7 +6,9 @@ Plain English, edited by hand. The filter reads this file every run, so changing
 
 The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC and ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. The thesis is the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically rather than binary. The readers are founders, BD, risk and engineering who already follow crypto Twitter closely.
 
-That last point sets the bar. They see the obvious stuff. A story earns a post when it would change a decision, a pitch, a risk assumption, or a competitive read this week. When in doubt, skip. Five to twelve posts on a normal day is right; three on a slow day is fine.
+That last point sets the bar, and the bar is high. They already see the obvious stuff. A story earns a post only when it would change a decision, a pitch, a risk assumption, or a competitive read this week. When in doubt, skip.
+
+The channel has room for five to eight posts a DAY in total, and fewer at weekends. A quiet day with two posts is a good day. A day with none is fine. Flooding the channel is the main way this bot fails.
 
 ## Tier 1, always post
 
@@ -35,6 +37,10 @@ That last point sets the bar. They see the obvious stuff. A story earns a post w
 - Reaction and commentary once the underlying story has been posted: "X says the bill isn't dead", "Y revises outlook", "industry reacts". One post per story, the substantive one.
 - Weekly roundups, newsletters, podcasts, opinion columns, sponsored posts, small-project press releases.
 - Crime and courts about individuals: scams, arrests, ransom demands, gambling charges, hacks of centralized companies with no DeFi mechanism involved.
+- Executive talk: "X says", interviews, conference remarks, predictions, someone describing plans or pilots. Post the action when it happens, not the person talking about it.
+- ETFs as products: launches, flows, share splits, AUM milestones, ticker changes. The exception is a fund that is itself tokenized or onchain.
+- Procedural regulatory steps: a rule sent for White House or OMB review, a comment period opening, an agenda item, a scheduled vote. Post the rule when it lands, not each step of its journey.
+- More coverage of a story thread already posted this week, unless it carries a material new fact. One post per story, and one story per thread per week.
 - Chain infrastructure with no credit angle: L2 upgrades, throughput records, client releases.
 
 ## SEC press releases
@@ -61,6 +67,9 @@ Skip:
 - "South Korean police charge 26 Polymarket users for illegal gambling"
 - "Group behind Revolut data breach demands $3 million in Monero"
 - "Crypto Long & Short: Six signs a crypto winter is ending"
-- "Clarity Act failure may hamper U.S. crypto as industry seeks legal clarity elsewhere" (analysis of a story already posted)
 - "Ethereum's upcoming Glamsterdam upgrade clears rehearsal"
 - "Zcash miner Fortitude names former Hut 8 chief CEO"
+- "Ava Labs president says NYSE spent a year testing Avalanche technology for tokenization plans" (an executive talking)
+- "Grayscale's Zcash ETF plans 3-for-1 split after $233 million inflow surge" (ETF corporate action)
+- "SEC Crypto Custody Rewrite Enters White House Review" (procedural step, and the week already had this thread)
+- "SEC Clears Tokenized Stocks To Trade Onchain As CFTC Widens Software Relief" (same story as the SEC exemption already posted)
