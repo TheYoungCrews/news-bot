@@ -17,6 +17,8 @@ Environment:
   MAX_PRIORITY        highest priority number allowed through, default 2 (3 = marginal, never posts)
   DUPE_THRESHOLD      title-overlap cut for same-story detection, default 0.42
   MAX_AGE_HOURS       ignore items older than this, default 36
+  ALERT_USER          Slack member ID to tag when something breaks, e.g. U01234567
+  START_POSTING_AT    ISO date/time (ET) before which the bot reads feeds but posts nothing
   UNFURL              "true" to let Slack unfurl links itself, default false (we build the card)
   PREVIEW             card (default) or plain, to post the bare headline + link line
   IMAGE_STYLE         large (default) or thumb
@@ -315,6 +317,19 @@ def preview_card(c):
         card["thumb_url" if env("IMAGE_STYLE", "large").lower() == "thumb" else "image_url"] = c["image"]
     return card
 
+def alert(msg):
+    """Post a human-readable problem report, tagging whoever owns the bot."""
+    who = env("ALERT_USER")                      # a Slack member ID, e.g. U01234567
+    run = ""
+    if env("GITHUB_RUN_ID"):
+        run = (f" | <{env('GITHUB_SERVER_URL', 'https://github.com')}/{env('GITHUB_REPOSITORY')}"
+               f"/actions/runs/{env('GITHUB_RUN_ID')}|run log>")
+    head = f"<@{who}> " if who else ""
+    try:
+        slack_post(f":warning: {head}the news bot needs a look. {msg}{run}")
+    except Exception as e:
+        log(f"could not post alert: {e}")
+
 def slack_post(text, card=None):
     url = env("SLACK_WEBHOOK_URL")
     if not url: raise RuntimeError("SLACK_WEBHOOK_URL is not set")
@@ -337,6 +352,17 @@ def main():
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
 
+    start_at = env("START_POSTING_AT")           # e.g. 2026-09-21T08:00 (ET); quiet until then
+    holding = False
+    if start_at and not a.dry_run:
+        try:
+            when = datetime.fromisoformat(start_at)
+            if when.tzinfo is None: when = when.replace(tzinfo=EASTERN)
+            holding = now() < when.timestamp()
+            if holding: log(f"holding until {start_at}: reading feeds, posting nothing")
+        except ValueError:
+            log(f"START_POSTING_AT is not a date I understand: {start_at!r}")
+
     if not a.dry_run and not env("SLACK_WEBHOOK_URL"):
         # nowhere to post yet (Slack app still pending): don't burn model calls on items we can't deliver
         log("SLACK_WEBHOOK_URL is not set, skipping this run")
@@ -345,7 +371,7 @@ def main():
     with open(os.path.join(ROOT, "feeds.json")) as f: feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
     with open(os.path.join(ROOT, "scope.md")) as f: scope = f.read()
     state = load_state()
-    first_run = state is None and not a.backfill_hours
+    first_run = (state is None and not a.backfill_hours) or holding
     state = state or {"seen": {}, "posted": [], "llm_failures": 0, "feed_failures": {}, "alerts": {}}
     alerts = []
 
@@ -366,7 +392,8 @@ def main():
             state["feed_failures"][feed["name"]] = n
             log(f"{feed['name']}: FAILED ({n} runs) {e}")
             if n == FEED_ALERT_AFTER:
-                alerts.append(f":warning: News bot: the {feed['name']} feed has failed for {n} runs in a row ({str(e)[:120]}).")
+                alerts.append(f"The {feed['name']} feed has been failing for {n} runs "
+                              f"(about 12 hours). Other sources are still posting. Error: {str(e)[:140]}")
 
     t = now()
     max_age = float(env("MAX_AGE_HOURS", "36")) * 3600
@@ -384,7 +411,7 @@ def main():
     for i, c in enumerate(cands): c["cid"] = f"c{i+1}"
 
     if first_run:
-        log(f"First run: remembered {len(uniq)} existing items, posting nothing. New stories post from the next run.")
+        log(f"Remembered {len(uniq)} existing items, posting nothing this run.")
     log(f"{len(cands)} new candidates")
 
     picks = []
@@ -398,7 +425,9 @@ def main():
             state["llm_failures"] += 1
             log(f"LLM filter FAILED ({state['llm_failures']} runs): {e}")
             if state["llm_failures"] == LLM_ALERT_AFTER:
-                alerts.append(f":warning: News bot: the AI filter has failed {LLM_ALERT_AFTER} runs in a row, so nothing is posting. Last error: {str(e)[:160]}")
+                alerts.append(f"The filter has failed {LLM_ALERT_AFTER} runs in a row, so nothing is posting "
+                              f"and stories are queueing up. Usually a bad or rate-limited model key. "
+                              f"Error: {str(e)[:160]}")
             dec = None
         if dec is not None:
             for c in cands:
@@ -466,8 +495,7 @@ def main():
         except Exception as e:
             log(f"Slack post failed, will retry next run: {c['title']} ({e})")
     for msg in alerts:
-        try: slack_post(msg)
-        except Exception as e: log(f"alert post failed: {e}")
+        alert(msg)
     save_state(state)
     return 1 if state["llm_failures"] else 0
 
