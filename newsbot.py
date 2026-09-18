@@ -14,7 +14,10 @@ Environment:
   CONTACT_EMAIL       optional, added to the User-Agent (SEC asks bots to identify themselves)
   MAX_POSTS_PER_RUN   default 8
   MAX_AGE_HOURS       ignore items older than this, default 36
-  UNFURL              "true" to let Slack show link previews, default false
+  UNFURL              "true" to let Slack unfurl links itself, default false (we build the card)
+  PREVIEW             card (default) or plain, to post the bare headline + link line
+  IMAGE_STYLE         large (default) or thumb
+  CARD_COLOR          left bar colour, default #2FFAE2
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
@@ -93,11 +96,21 @@ def parse_feed(raw, feed):
         ts = parse_date(child_text(n, "pubDate", "published", "updated", "date"))
         cats = [(c.text or c.attrib.get("term", "")).strip() for c in n if local(c.tag) == "category"]
         summary = strip_html(child_text(n, "description", "summary", "content", "encoded"))
+        image = ""
+        for c in n:
+            u = c.attrib.get("url", "")
+            if local(c.tag) in ("thumbnail", "content", "enclosure") and u.startswith("http"):
+                is_img = (c.attrib.get("medium") == "image"
+                          or c.attrib.get("type", "").startswith("image")
+                          or re.search(r"\.(jpe?g|png|webp)", u, re.I))
+                if is_img:
+                    image = u
+                    break
         items.append({
             "id": hashlib.sha1(canonical(link).encode()).hexdigest()[:16],
             "source": feed["name"], "kind": feed.get("kind", "news"),
             "title": title, "url": link, "ts": ts,
-            "categories": [c for c in cats if c][:6], "summary": summary,
+            "categories": [c for c in cats if c][:6], "summary": summary, "image": image,
         })
     return items
 
@@ -268,11 +281,29 @@ def stub_decide(cands, scope, posted_titles):
 
 def slack_escape(s): return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-def slack_post(text):
+def preview_card(c):
+    """Build the link preview ourselves from the feed's own title, summary and image.
+
+    Slack's own unfurling depends on the publisher answering Slackbot; The Defiant
+    (Cloudflare) returns 403, so its links would never get a card. The feed already
+    carries everything a card needs, so we build it and keep unfurling off.
+    """
+    if env("PREVIEW", "card").lower() == "plain": return None
+    card = {"color": env("CARD_COLOR", "#2FFAE2"),
+            "title": c["title"], "title_link": c["url"],
+            "footer": c["source"], "fallback": f"{c['title']} - {c['source']}"}
+    if c.get("summary"): card["text"] = c["summary"][:280]
+    if c.get("image"):
+        card["thumb_url" if env("IMAGE_STYLE", "large").lower() == "thumb" else "image_url"] = c["image"]
+    return card
+
+def slack_post(text, card=None):
     url = env("SLACK_WEBHOOK_URL")
     if not url: raise RuntimeError("SLACK_WEBHOOK_URL is not set")
     unfurl = env("UNFURL", "false").lower() == "true"
-    body = json.dumps({"text": text, "unfurl_links": unfurl, "unfurl_media": unfurl}).encode()
+    payload = {"text": text, "unfurl_links": unfurl, "unfurl_media": unfurl}
+    if card: payload["attachments"] = [card]
+    body = json.dumps(payload).encode()
     http(url, data=body, headers={"Content-Type": "application/json"}, timeout=20)
     time.sleep(1.1)  # Slack allows about 1 message per second per webhook
 
@@ -374,7 +405,8 @@ def main():
 
     for c in picks:
         try:
-            slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}")
+            slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
+                       card=preview_card(c))
             state["seen"][c["id"]] = t
             state["posted"].append({"title": c["title"], "source": c["source"], "url": c["url"], "at": t})
             log(f"posted: {c['title']}")
