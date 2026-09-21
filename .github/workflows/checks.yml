@@ -1,0 +1,21 @@
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile newsbot.py
+      - run: python3 -m json.tool feeds.json > /dev/null
+      - run: |
+          pip install --quiet pyyaml
+          python3 -c "import yaml, glob
+for f in glob.glob('.github/workflows/*.yml'):
+    yaml.safe_load(open(f))
+    print(f, 'OK')"
