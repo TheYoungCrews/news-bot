@@ -39,9 +39,10 @@ jobs:
 
       - name: Run bot
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # TARGET=prod posts to #news, anything else (or unset) posts to the test channel
+          SLACK_WEBHOOK_URL: ${{ vars.TARGET == 'prod' && secrets.SLACK_WEBHOOK_PROD || secrets.SLACK_WEBHOOK_TEST || secrets.SLACK_WEBHOOK_URL }}
+          SLACK_CHANNEL_ID: ${{ vars.TARGET == 'prod' && vars.SLACK_CHANNEL_PROD || vars.SLACK_CHANNEL_TEST || vars.SLACK_CHANNEL_ID }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
