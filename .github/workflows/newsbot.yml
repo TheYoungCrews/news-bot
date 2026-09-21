@@ -1,11 +1,10 @@
 name: news-bot
 
 on:
-  schedule:
-    # times are UTC. 12:00-23:59 UTC covers 8am-7pm ET in summer, 7am-6pm ET in winter.
-    - cron: "2,17,32,47 12-23 * * 1-5"   # weekdays, business hours: every 15 min
-    - cron: "2 0-11/2 * * 1-5"           # weekdays, overnight: every 2 hours
-    - cron: "2 */2 * * 0,6"              # weekends: every 2 hours
+  # No `schedule:` trigger here on purpose. GitHub's own cron was unreliable (missed
+  # runs, hours-late weekend runs) -- an external scheduler now calls workflow_dispatch
+  # directly instead, on the same cadence this used to run on. Re-adding `schedule:`
+  # here would double-post alongside it.
   workflow_dispatch:
     inputs:
       dry_run:
