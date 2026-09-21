@@ -364,7 +364,9 @@ def slack_api(method, payload=None, params=None):
         data = json.dumps(payload).encode()
         headers["Content-Type"] = "application/json; charset=utf-8"
     r = json.loads(http(url, data=data, headers=headers, timeout=20))
-    if not r.get("ok"): raise RuntimeError(f"Slack {method}: {r.get('error')}")
+    if not r.get("ok"):
+        extra = f" (needs {r['needed']}; token has {r.get('provided') or 'none'})" if r.get("needed") else ""
+        raise RuntimeError(f"Slack {method}: {r.get('error')}{extra}")
     return r
 
 def slack_post(text, card=None):
@@ -387,6 +389,27 @@ def slack_post(text, card=None):
     http(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, timeout=20)
     time.sleep(1.1)  # Slack allows about 1 message per second
     return None, None
+
+def test_post():
+    """Repost the last story we sent, to prove the Slack wiring. Touches no state.
+    Trigger: run the workflow with dry_run off and backfill_hours set to "test"."""
+    last = ((load_state() or {}).get("posted") or [None])[-1]
+    c = ({"title": last["title"], "url": last["url"], "source": last["source"]} if last else
+         {"title": "Lotus Newswire test post", "url": "https://github.com/TheYoungCrews/news-bot", "source": "test"})
+    try:
+        ch, ts = slack_post(f":test_tube: test · <{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
+                            card=preview_card(c))
+    except Exception as e:
+        log(f"TEST POST FAILED on every route: {e}")
+        return 1
+    if ch:
+        log(f"TEST POST OK via the bot token, channel {ch}. Reactions will be read.")
+        return 0
+    if SLACK_ERRORS:
+        log(f"TEST POST went out via the webhook because the bot token was rejected: {SLACK_ERRORS[0]}")
+        return 1
+    log("TEST POST OK via the webhook (no bot token set, so reactions will not be read)")
+    return 0
 
 def collect_feedback(state, t):
     """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
@@ -439,6 +462,9 @@ def _run():
         # kill switch: set the PAUSED repo variable to stop posting without touching code
         log("PAUSED is set, doing nothing this run")
         return 0
+
+    if env("BACKFILL_HOURS", "").strip().lower() == "test" and not a.dry_run:
+        return test_post()
 
     start_at = env("START_POSTING_AT")           # e.g. 2026-09-21T08:00 (ET); quiet until then
     holding = False
