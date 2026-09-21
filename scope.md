@@ -22,7 +22,7 @@ The channel has room for five to eight posts a DAY in total, and fewer at weeken
 
 ## Tier 2, post if it's substantive
 
-- **Stablecoins and yield-bearing dollars.** Circle, Tether, Ethena, Sky, Paxos, Agora, Falcon, Resolv, Midas: launches, reserve changes, yield mechanics, bank or fintech issuance, stablecoin legislation.
+- **Stablecoins and yield-bearing dollars.** Circle, Tether, Ethena, Sky, Paxos, Agora, Falcon, Resolv, Midas: launches, reserve changes, yield mechanics, a bank or fintech issuing its own stablecoin, stablecoin legislation.
 - **RWA and tokenization.** BlackRock, Franklin Templeton, WisdomTree, Apollo, Hamilton Lane, Ondo, Superstate, Securitize, Centrifuge, Grove, Midas: tokenized treasuries, credit funds, private credit onchain, tokenized equities, and the market plumbing behind them (DTCC, Nasdaq, transfer agents).
 - **Institutions arriving onchain.** Banks, brokers, exchanges and asset managers launching lending, custody, settlement, stablecoin or tokenization products, or their own chains: Coinbase, Kraken, Robinhood, Anchorage, Galaxy, Citadel, JPMorgan, Fidelity, Nasdaq.
 - **Onchain insurance and security.** Nexus Mutual, Firelight, OpenZeppelin, Sherlock, Code4rena, Certora, Cyfrin, Chainlink, Pyth: launches, acquisitions, incidents, and oracle design changes.
@@ -42,6 +42,7 @@ The channel has room for five to eight posts a DAY in total, and fewer at weeken
 - Procedural regulatory steps: a rule sent for White House or OMB review, a comment period opening, an agenda item, a scheduled vote. Post the rule when it lands, not each step of its journey.
 - More coverage of a story thread already posted this week, unless it carries a material new fact. One post per story, and one story per thread per week.
 - Chain infrastructure with no credit angle: L2 upgrades, throughput records, client releases.
+- A fintech, bank, exchange or app adding support for, distributing, or becoming a "regulated issuer" reseller of someone else's stablecoin. This happens constantly and doesn't change anything for Lotus. The exception is the stablecoin's own issuer launching it or changing its reserves or mechanics -- that's Tier 2.
 
 ## SEC press releases
 
@@ -73,3 +74,4 @@ Skip:
 - "Grayscale's Zcash ETF plans 3-for-1 split after $233 million inflow surge" (ETF corporate action)
 - "SEC Crypto Custody Rewrite Enters White House Review" (procedural step, and the week already had this thread)
 - "SEC Clears Tokenized Stocks To Trade Onchain As CFTC Widens Software Relief" (same story as the SEC exemption already posted)
+- "Revolut Starts EURR Rollout With Bridge as Regulated Issuer" (a fintech distributing someone else's stablecoin -- routine, doesn't change anything for Lotus)
