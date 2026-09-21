@@ -4,7 +4,10 @@
 Standard library only, so the GitHub Actions job needs no installs.
 
 Environment:
-  SLACK_WEBHOOK_URL   Slack incoming webhook (required unless --dry-run)
+  SLACK_BOT_TOKEN     xoxb- bot token (chat:write, reactions:read). With SLACK_CHANNEL_ID the bot
+                      posts as itself and reads team reactions on its posts
+  SLACK_CHANNEL_ID    channel to post in, e.g. C0123ABCD (the bot must be invited)
+  SLACK_WEBHOOK_URL   fallback: incoming webhook, posts only, cannot read reactions
   LLM_API_KEY         API key for an OpenAI-compatible chat endpoint (Gemini by default)
   LLM_BASE_URL        default https://generativelanguage.googleapis.com/v1beta/openai/
                       Claude: https://api.anthropic.com/v1   xAI: https://api.x.ai/v1
@@ -29,13 +32,17 @@ import argparse, hashlib, html, json, os, re, sys, time, traceback, urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 STATE_PATH = os.path.join(ROOT, "state", "seen.json")
 EASTERN = timezone(timedelta(hours=-4))     # the team's clock, for the weekend rule
 SEEN_TTL = 14 * 86400
 POSTED_TTL = 7 * 86400
+FEEDBACK_WINDOW = 3 * 86400   # keep checking a post for reactions this long
+FEEDBACK_TTL = 90 * 86400     # remember the team's verdicts this long
+UP = {"+1", "thumbsup", "white_check_mark", "heavy_check_mark", "fire", "100"}
+DOWN = {"-1", "thumbsdown", "x", "no_entry", "no_entry_sign", "wastebasket"}
 LLM_ALERT_AFTER = 3        # consecutive failed runs before a Slack warning
 FEED_ALERT_AFTER = 24      # consecutive failed runs (12h at 30 min) before a Slack warning
 ALERT_COOLDOWN = 12 * 3600 # don't repeat the same warning more often than this
@@ -343,15 +350,70 @@ def alert(msg):
     except Exception as e:
         log(f"could not post alert: {e}")
 
+def slack_ready():
+    return bool((env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID")) or env("SLACK_WEBHOOK_URL"))
+
+def slack_api(method, payload=None, params=None):
+    url = "https://slack.com/api/" + method
+    if params: url += "?" + urlencode(params)
+    headers = {"Authorization": "Bearer " + env("SLACK_BOT_TOKEN", "")}
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode()
+        headers["Content-Type"] = "application/json; charset=utf-8"
+    r = json.loads(http(url, data=data, headers=headers, timeout=20))
+    if not r.get("ok"): raise RuntimeError(f"Slack {method}: {r.get('error')}")
+    return r
+
 def slack_post(text, card=None):
-    url = env("SLACK_WEBHOOK_URL")
-    if not url: raise RuntimeError("SLACK_WEBHOOK_URL is not set")
+    """Post a message. Returns (channel, ts) when posting as the bot, (None, None) via webhook."""
     unfurl = env("UNFURL", "false").lower() == "true"
     payload = {"text": text, "unfurl_links": unfurl, "unfurl_media": unfurl}
     if card: payload["attachments"] = [card]
-    body = json.dumps(payload).encode()
-    http(url, data=body, headers={"Content-Type": "application/json"}, timeout=20)
-    time.sleep(1.1)  # Slack allows about 1 message per second per webhook
+    if env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID"):
+        r = slack_api("chat.postMessage", {**payload, "channel": env("SLACK_CHANNEL_ID")})
+        time.sleep(1.1)
+        return r["channel"], r["ts"]
+    url = env("SLACK_WEBHOOK_URL")
+    if not url: raise RuntimeError("no Slack destination: set SLACK_BOT_TOKEN + SLACK_CHANNEL_ID, or SLACK_WEBHOOK_URL")
+    http(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, timeout=20)
+    time.sleep(1.1)  # Slack allows about 1 message per second
+    return None, None
+
+def collect_feedback(state, t):
+    """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
+    fb = state.setdefault("feedback", {})
+    if env("SLACK_BOT_TOKEN"):
+        for p in state["posted"]:
+            if not p.get("ts") or t - p["at"] > FEEDBACK_WINDOW: continue
+            try:
+                r = slack_api("reactions.get", params={"channel": p["ch"], "timestamp": p["ts"]})
+            except Exception as e:
+                log(f"could not read reactions, skipping feedback this run: {e}")
+                break
+            up = down = 0
+            for rx in r.get("message", {}).get("reactions", []):
+                name = rx["name"].split("::")[0]          # "+1::skin-tone-3" -> "+1"
+                if name in UP: up += rx["count"]
+                elif name in DOWN: down += rx["count"]
+            if up or down:
+                fb[p["url"]] = {"title": p["title"], "source": p["source"], "up": up, "down": down, "at": p["at"]}
+    for k in [k for k, v in fb.items() if t - v["at"] > FEEDBACK_TTL]: del fb[k]
+
+def feedback_block(state):
+    """Recent team verdicts, appended to the scope so the filter learns from them every run."""
+    fb = sorted(state.get("feedback", {}).values(), key=lambda v: -v["at"])
+    bad = [v for v in fb if v["down"] > v["up"]][:15]
+    good = [v for v in fb if v["up"] > v["down"]][:10]
+    if not bad and not good: return ""
+    out = ["", "", "## Team feedback from the channel (newest first; this outranks the examples above)"]
+    if bad:
+        out.append("The team thumbed these DOWN. Skip stories like them:")
+        out += [f"- {v['title']} ({v['source']})" for v in bad]
+    if good:
+        out.append("The team thumbed these UP. Post more like them:")
+        out += [f"- {v['title']} ({v['source']})" for v in good]
+    return "\n".join(out)
 
 # ---------- main ----------
 
@@ -381,9 +443,9 @@ def _run():
         except ValueError:
             log(f"START_POSTING_AT is not a date I understand: {start_at!r}")
 
-    if not a.dry_run and not env("SLACK_WEBHOOK_URL"):
+    if not a.dry_run and not slack_ready():
         # nowhere to post yet (Slack app still pending): don't burn model calls on items we can't deliver
-        log("SLACK_WEBHOOK_URL is not set, skipping this run")
+        log("no Slack destination is set, skipping this run")
         return 0
 
     with open(os.path.join(ROOT, "feeds.json")) as f: feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
@@ -432,12 +494,13 @@ def _run():
         log(f"Remembered {len(uniq)} existing items, posting nothing this run.")
     log(f"{len(cands)} new candidates")
 
+    if not a.dry_run: collect_feedback(state, t)
     picks = []
     if cands:
         posted_titles = [f"- {p['title']} ({p['source']})" for p in state["posted"]]
         try:
             decide = stub_decide if a.stub_llm else llm_decide
-            dec = decide(cands, scope, posted_titles)
+            dec = decide(cands, scope + feedback_block(state), posted_titles)
             state["llm_failures"] = 0
         except Exception as e:
             state["llm_failures"] += 1
@@ -505,10 +568,11 @@ def _run():
 
     for c in picks:
         try:
-            slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
-                       card=preview_card(c))
+            ch, ts = slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
+                                card=preview_card(c))
             state["seen"][c["id"]] = t
-            state["posted"].append({"title": c["title"], "source": c["source"], "url": c["url"], "at": t})
+            state["posted"].append({"title": c["title"], "source": c["source"], "url": c["url"],
+                                    "at": t, "ch": ch, "ts": ts})
             log(f"posted: {c['title']}")
         except Exception as e:
             log(f"Slack post failed, will retry next run: {c['title']} ({e})")
