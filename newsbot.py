@@ -350,6 +350,8 @@ def alert(msg):
     except Exception as e:
         log(f"could not post alert: {e}")
 
+SLACK_ERRORS = []   # bot-token failures this run, reported once via alert()
+
 def slack_ready():
     return bool((env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID")) or env("SLACK_WEBHOOK_URL"))
 
@@ -371,9 +373,15 @@ def slack_post(text, card=None):
     payload = {"text": text, "unfurl_links": unfurl, "unfurl_media": unfurl}
     if card: payload["attachments"] = [card]
     if env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID"):
-        r = slack_api("chat.postMessage", {**payload, "channel": env("SLACK_CHANNEL_ID")})
-        time.sleep(1.1)
-        return r["channel"], r["ts"]
+        try:
+            r = slack_api("chat.postMessage", {**payload, "channel": env("SLACK_CHANNEL_ID")})
+            time.sleep(1.1)
+            return r["channel"], r["ts"]
+        except Exception as e:
+            # a bad scope or a bot missing from the channel must not go quiet: fall back and report
+            SLACK_ERRORS.append(str(e))
+            if not env("SLACK_WEBHOOK_URL"): raise
+            log(f"bot token post failed ({e}), using the webhook instead")
     url = env("SLACK_WEBHOOK_URL")
     if not url: raise RuntimeError("no Slack destination: set SLACK_BOT_TOKEN + SLACK_CHANNEL_ID, or SLACK_WEBHOOK_URL")
     http(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, timeout=20)
@@ -566,6 +574,7 @@ def _run():
         log(f"{len(picks)} would post, {len(cands) - len(picks)} filtered out or held.")
         return 0
 
+    failed = 0
     for c in picks:
         try:
             ch, ts = slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}",
@@ -575,11 +584,16 @@ def _run():
                                     "at": t, "ch": ch, "ts": ts})
             log(f"posted: {c['title']}")
         except Exception as e:
+            failed += 1
             log(f"Slack post failed, will retry next run: {c['title']} ({e})")
+    if SLACK_ERRORS and should_alert(state, "slack-token", t):
+        alerts.append(f"Slack rejected the bot token (`{SLACK_ERRORS[0][:100]}`), so posts are going through "
+                      f"the webhook and team reactions are not being read. Usually a missing scope that needs "
+                      f"admin approval, or the bot is not in the channel.")
     for msg in alerts:
         alert(msg)
     save_state(state)
-    return 1 if state["llm_failures"] else 0
+    return 1 if state["llm_failures"] or failed else 0
 
 def main():
     """Never let a crash be silent: GitHub turns the run red, Slack gets a name to tag."""
