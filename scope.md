@@ -23,7 +23,7 @@ The channel has room for five to eight posts a DAY in total, and fewer at weeken
 ## Tier 2, post if it's substantive
 
 - **Stablecoins and yield-bearing dollars.** Circle, Tether, Ethena, Sky, Paxos, Agora, Falcon, Resolv, Midas: launches, reserve changes, yield mechanics, a bank or fintech issuing its own stablecoin, stablecoin legislation.
-- **RWA and tokenization.** BlackRock, Franklin Templeton, WisdomTree, Apollo, Hamilton Lane, Ondo, Superstate, Securitize, Centrifuge, Grove, Midas: tokenized treasuries, credit funds, private credit onchain, tokenized equities, and the market plumbing behind them (DTCC, Nasdaq, transfer agents).
+- **RWA and tokenization.** BlackRock, Franklin Templeton, WisdomTree, Apollo, Hamilton Lane, Ondo, Superstate, Securitize, Centrifuge, Grove, Midas: launches, new funds, and material changes to the market plumbing behind them (DTCC, Nasdaq, transfer agents) -- not every integration one of these does with the other.
 - **Institutions arriving onchain.** Banks, brokers, exchanges and asset managers launching lending, custody, settlement, stablecoin or tokenization products, or their own chains: Coinbase, Kraken, Robinhood, Anchorage, Galaxy, Citadel, JPMorgan, Fidelity, Nasdaq.
 - **Onchain insurance and security.** Nexus Mutual, Firelight, OpenZeppelin, Sherlock, Code4rena, Certora, Cyfrin, Chainlink, Pyth: launches, acquisitions, incidents, and oracle design changes.
 - **Original research worth reading** on credit market structure, vault risk, liquidation design or lending mechanism design, including from the protocols themselves.
@@ -37,12 +37,15 @@ The channel has room for five to eight posts a DAY in total, and fewer at weeken
 - Reaction and commentary once the underlying story has been posted: "X says the bill isn't dead", "Y revises outlook", "industry reacts". One post per story, the substantive one.
 - Weekly roundups, newsletters, podcasts, opinion columns, sponsored posts, small-project press releases.
 - Crime and courts about individuals: scams, arrests, ransom demands, gambling charges, hacks of centralized companies with no DeFi mechanism involved.
-- Executive talk: "X says", interviews, conference remarks, predictions, someone describing plans or pilots. Post the action when it happens, not the person talking about it.
+- Executive talk: "X says", interviews, conference remarks, predictions, someone describing plans or pilots. This includes analyst and VC commentary pieces framed as a trend or a case ("X makes the case for Y", "the future of Z, according to..."), even when the headline reads like news. Post the action when it happens, not someone's take on it.
+- Leadership hires, appointments and departures, even at Tier 1 protocols. The exception is hiring that itself is the news, like founding a new credit or risk desk.
 - ETFs as products: launches, flows, share splits, AUM milestones, ticker changes. The exception is a fund that is itself tokenized or onchain.
 - Procedural regulatory steps: a rule sent for White House or OMB review, a comment period opening, an agenda item, a scheduled vote. Post the rule when it lands, not each step of its journey.
 - More coverage of a story thread already posted this week, unless it carries a material new fact. One post per story, and one story per thread per week.
 - Chain infrastructure with no credit angle: L2 upgrades, throughput records, client releases.
 - A fintech, bank, exchange or app adding support for, distributing, or becoming a "regulated issuer" reseller of someone else's stablecoin. This happens constantly and doesn't change anything for Lotus. The exception is the stablecoin's own issuer launching it or changing its reserves or mechanics -- that's Tier 2.
+- One RWA player "joining," "integrating with," or plugging into another's network or rails, with no new volume, fund or mechanism attached. Routine plumbing, happens constantly.
+- Central banks (ECB, Fed, BOE, etc.) piloting or deploying their own tokenization platforms, or buying tokenized instruments with their own funds. This is macro and tradfi, not Lotus's RWA thesis. Private-sector market plumbing (DTCC, Nasdaq, transfer agents) stays in Tier 2.
 
 ## SEC press releases
 
@@ -54,7 +57,6 @@ Post:
 - "SEC rolls out long-awaited 'innovation exemption' for tokenized securities venues"
 - "Ratings giant S&P Global acquires OpenZeppelin in tokenized finance risk push"
 - "Balancer Proposes Shutting Down and Returning Its $9 Million Treasury to BAL Holders"
-- "Ondo's Oasis Pro Markets Joins DTCC's Fund/SERV Processing Network"
 - "SEC and CFTC Chairmen Say They Will Write Crypto Rules Without CLARITY Act"
 - "Hester Peirce statement on crypto vaults and lending strategies"
 - "Morpho raises $175M"
@@ -75,3 +77,7 @@ Skip:
 - "SEC Crypto Custody Rewrite Enters White House Review" (procedural step, and the week already had this thread)
 - "SEC Clears Tokenized Stocks To Trade Onchain As CFTC Widens Software Relief" (same story as the SEC exemption already posted)
 - "Revolut Starts EURR Rollout With Bridge as Regulated Issuer" (a fintech distributing someone else's stablecoin -- routine, doesn't change anything for Lotus)
+- "Ondo's Oasis Pro Markets Joins DTCC's Fund/SERV Processing Network" (routine plumbing integration, no new fund or mechanism)
+- "ECB plans to buy tokenized bonds with its own funds" (a central bank's own initiative -- macro, not Lotus's RWA thesis)
+- "As RWA trading surges on Hyperliquid, Dragonfly's Qureshi makes the case for a multichain future" (analyst commentary dressed up as news)
+- Every headline about the SEC's tokenized-securities "innovation exemption" beyond the first one that posted it -- it's one thread, one post, however many outlets reframe it
