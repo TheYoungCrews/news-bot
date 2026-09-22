@@ -20,6 +20,9 @@ on:
       delete:
         description: "Delete a previously-posted story's Slack message (title substring), ignoring dry_run/backfill_hours/repost"
         default: ""
+      post_url:
+        description: "Find this exact story URL in the live feeds and post it now, bypassing the LLM filter"
+        default: ""
 
 permissions:
   contents: write
@@ -73,10 +76,13 @@ jobs:
           BACKFILL_HOURS: ${{ inputs.backfill_hours }}
           REPOST: ${{ inputs.repost }}
           DELETE: ${{ inputs.delete }}
+          POST_URL: ${{ inputs.post_url }}
         run: |
           ARGS=()
           if [ -n "$DELETE" ]; then
             ARGS+=(--delete "$DELETE")
+          elif [ -n "$POST_URL" ]; then
+            ARGS+=(--post-url "$POST_URL")
           elif [ -n "$REPOST" ]; then
             ARGS+=(--repost "$REPOST")
           else

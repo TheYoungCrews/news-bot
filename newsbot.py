@@ -465,6 +465,38 @@ def delete_story(match):
     save_state(state)
     return 0
 
+def post_url(url):
+    """Find a specific story by URL in the live feeds and post it right now, bypassing the
+    LLM filter -- for a story that needs to be in the channel immediately. Marks it seen and
+    posted like a normal pick, so the regular pipeline won't post or judge it again."""
+    with open(os.path.join(ROOT, "feeds.json")) as f:
+        feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
+    target = canonical(url)
+    hit = None
+    for feed in feeds:
+        try:
+            items = parse_feed(http(feed["url"]), feed)
+        except Exception as e:
+            log(f"{feed['name']}: fetch failed: {e}")
+            continue
+        hit = next((it for it in items if canonical(it["url"]) == target), None)
+        if hit: break
+    if not hit:
+        log(f"story not found in any feed: {url}")
+        return 1
+    try:
+        ch, ts = slack_post(f"<{hit['url']}|{slack_escape(hit['title'])}> · {slack_escape(hit['source'])}", card=preview_card(hit))
+    except Exception as e:
+        log(f"post failed: {e}")
+        return 1
+    state = load_state() or {"seen": {}, "posted": [], "llm_failures": 0, "feed_failures": {}, "alerts": {}}
+    t = now()
+    state["seen"][hit["id"]] = t
+    state["posted"].append({"title": hit["title"], "source": hit["source"], "url": hit["url"], "at": t, "ch": ch, "ts": ts})
+    save_state(state)
+    log(f"posted: {hit['title']} -> channel {ch or '(webhook)'}")
+    return 0
+
 def collect_feedback(state, t):
     """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
     fb = state.setdefault("feedback", {})
@@ -510,6 +542,7 @@ def _run():
     ap.add_argument("--feeds-dir", help="read <slug>.xml fixtures from this folder instead of fetching")
     ap.add_argument("--repost", help="repost an already-posted story (matched by title substring) to this run's channel")
     ap.add_argument("--delete", help="delete a previously-posted story's Slack message (matched by title substring)")
+    ap.add_argument("--post-url", help="find this exact story URL in the live feeds and post it now, bypassing the LLM filter")
     a = ap.parse_args()
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
@@ -524,6 +557,9 @@ def _run():
 
     if a.delete:
         return delete_story(a.delete)
+
+    if a.post_url:
+        return post_url(a.post_url)
 
     if a.repost:
         return repost_story(a.repost)
