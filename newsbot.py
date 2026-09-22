@@ -411,6 +411,28 @@ def test_post():
     log("TEST POST OK via the webhook (no bot token set, so reactions will not be read)")
     return 0
 
+def repost_story(match):
+    """Repost an already-posted story to the channel this run resolves to (real card, not a
+    test post) -- for pushing a good pick into a channel it didn't originally go to, like the
+    first story into #news right after a TARGET switch. Matches by title substring, most
+    recent first. Updates that story's ch/ts so feedback tracking follows the new message."""
+    state = load_state()
+    hit = next((p for p in reversed((state or {}).get("posted", [])) if match.lower() in p["title"].lower()), None)
+    if not hit:
+        log(f"no posted story matching {match!r}")
+        return 1
+    c = {"title": hit["title"], "url": hit["url"], "source": hit["source"]}
+    try:
+        ch, ts = slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}", card=preview_card(c))
+    except Exception as e:
+        log(f"repost failed: {e}")
+        return 1
+    if ch:
+        hit["ch"], hit["ts"] = ch, ts
+        save_state(state)
+    log(f"reposted: {hit['title']} -> channel {ch or '(webhook)'}")
+    return 0
+
 def collect_feedback(state, t):
     """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
     fb = state.setdefault("feedback", {})
@@ -454,6 +476,7 @@ def _run():
     ap.add_argument("--backfill-hours", type=float, default=0, help="evaluate items from the last N hours even if already seen")
     ap.add_argument("--stub-llm", action="store_true", help="keyword stand-in for testing plumbing")
     ap.add_argument("--feeds-dir", help="read <slug>.xml fixtures from this folder instead of fetching")
+    ap.add_argument("--repost", help="repost an already-posted story (matched by title substring) to this run's channel")
     a = ap.parse_args()
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
@@ -465,6 +488,9 @@ def _run():
 
     if env("BACKFILL_HOURS", "").strip().lower() == "test" and not a.dry_run:
         return test_post()
+
+    if a.repost:
+        return repost_story(a.repost)
 
     start_at = env("START_POSTING_AT")           # e.g. 2026-09-21T08:00 (ET); quiet until then
     holding = False
