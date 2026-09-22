@@ -678,10 +678,13 @@ def _run():
                 fresh.append(c)
             deduped = fresh
 
-            # daily budget: weekends are quieter, and a single run never floods the channel
+            # daily budget: weekends are quieter, and a single run never floods the channel.
+            # test and prod share state, so only count posts that went to *this* run's
+            # channel -- otherwise test-channel activity (or vice versa) eats prod's budget.
             weekend = datetime.fromtimestamp(t, timezone.utc).astimezone(EASTERN).weekday() >= 5
             day_cap = int(env("MAX_POSTS_PER_WEEKEND_DAY", "3") if weekend else env("MAX_POSTS_PER_DAY", "8"))
-            posted_today = sum(1 for p in state["posted"] if t - p["at"] < 86400)
+            this_channel = env("SLACK_CHANNEL_ID")
+            posted_today = sum(1 for p in state["posted"] if t - p["at"] < 86400 and p.get("ch") == this_channel)
             room = max(0, day_cap - posted_today)
             if room < len(deduped):
                 log(f"daily budget: {posted_today}/{day_cap} posted in the last 24h, room for {room}")
