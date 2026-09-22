@@ -415,13 +415,27 @@ def repost_story(match):
     """Repost an already-posted story to the channel this run resolves to (real card, not a
     test post) -- for pushing a good pick into a channel it didn't originally go to, like the
     first story into #news right after a TARGET switch. Matches by title substring, most
-    recent first. Updates that story's ch/ts so feedback tracking follows the new message."""
+    recent first. Updates that story's ch/ts so feedback tracking follows the new message.
+
+    state.posted only keeps title/source/url, not image/summary, so this re-fetches the
+    source feed and looks the story up by URL to rebuild the full card. Falls back to a
+    bare title/link card if the feed fetch fails or the item has aged out of it.
+    """
     state = load_state()
     hit = next((p for p in reversed((state or {}).get("posted", [])) if match.lower() in p["title"].lower()), None)
     if not hit:
         log(f"no posted story matching {match!r}")
         return 1
     c = {"title": hit["title"], "url": hit["url"], "source": hit["source"]}
+    with open(os.path.join(ROOT, "feeds.json")) as f:
+        feed_cfg = next((x for x in json.load(f)["feeds"] if x["name"] == hit["source"]), None)
+    if feed_cfg:
+        try:
+            fresh = next((it for it in parse_feed(http(feed_cfg["url"]), feed_cfg) if canonical(it["url"]) == canonical(hit["url"])), None)
+            if fresh: c = fresh
+            else: log("story not found in the current feed, reposting without image/summary")
+        except Exception as e:
+            log(f"could not refresh the card, reposting without image/summary: {e}")
     try:
         ch, ts = slack_post(f"<{c['url']}|{slack_escape(c['title'])}> · {slack_escape(c['source'])}", card=preview_card(c))
     except Exception as e:
