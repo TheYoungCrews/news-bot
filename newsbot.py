@@ -146,30 +146,29 @@ def save_state(st):
 
 # ---------- LLM filter ----------
 
-PROMPT = """You filter crypto news for a company Slack channel. Follow the editorial scope below exactly.
+PROMPT = """Filter crypto news for a company Slack channel per this scope.
 
 <scope>
 {scope}
 </scope>
 
-Headlines already posted to the channel in the last few days (do not post the same story again, even from a different outlet or with new wording):
+Already posted (don't repost, even reworded or from another outlet):
 <already_posted>
 {posted}
 </already_posted>
 
-Candidate items, one JSON object per line:
+Candidates, one JSON object per line:
 <candidates>
 {candidates}
 </candidates>
 
 Rules:
-- Decide for every candidate.
-- If several candidates cover the same story, post only one of them: prefer the most complete news outlet story, or the primary source (regulator or protocol forum) if no outlet covered it yet.
-- priority: 1 = major (a team member would be annoyed to miss it), 2 = clearly relevant, 3 = marginal.
-  Only 1 and 2 ever get posted, and the channel has room for about 5-8 posts a DAY in total, so be strict.
-- Skip anything that continues a story thread already in <already_posted>, unless it adds a material new fact.
-- Reply with JSON only, no prose, in this shape:
-{{"decisions": [{{"id": "c1", "title_starts": "the first four words of that item's title", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
+- Decide every candidate.
+- Same story in several candidates: post one only -- the fullest outlet piece, or the primary source (regulator/protocol) if none covered it yet.
+- priority 1 = major, 2 = clearly relevant, 3 = marginal. Only 1-2 post; channel fits ~5-8/day, so be strict.
+- Skip anything continuing an <already_posted> thread unless it adds a material new fact.
+- JSON only, no prose:
+{{"decisions": [{{"id": "c1", "title_starts": "first four words", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
 """
 
 PROMPT_TOKEN_BUDGET = 5500   # len(prompt)//4 estimate; Groq's tightest model caps at 7000 TPM
@@ -189,7 +188,7 @@ def llm_decide(cands, scope, bad, good, posted_titles):
         nonlocal warned
         lines = "\n".join(json.dumps({"id": c["cid"], "source": c["source"],
                                       "title": c["title"], "categories": c["categories"],
-                                      "summary": c["summary"][:300]}, ensure_ascii=False) for c in chunk)
+                                      "summary": c["summary"][:200]}, ensure_ascii=False) for c in chunk)
         while True:
             prompt = PROMPT.format(scope=scope + feedback_text(bad, good),
                                     posted="\n".join(posted_titles) or "(none)", candidates=lines)
@@ -544,12 +543,12 @@ def feedback_rows(state):
 def feedback_text(bad, good):
     """Render feedback rows as scope text, appended so the filter learns from them every run."""
     if not bad and not good: return ""
-    out = ["", "", "## Team feedback from the channel (newest first; this outranks the examples above)"]
+    out = ["", "", "## Team feedback (newest first, outranks examples above)"]
     if bad:
-        out.append("The team thumbed these DOWN. Skip stories like them:")
+        out.append("DOWN, skip like these:")
         out += [f"- {v['title']} ({v['source']})" for v in bad]
     if good:
-        out.append("The team thumbed these UP. Post more like them:")
+        out.append("UP, post like these:")
         out += [f"- {v['title']} ({v['source']})" for v in good]
     return "\n".join(out)
 
