@@ -447,6 +447,24 @@ def repost_story(match):
     log(f"reposted: {hit['title']} -> channel {ch or '(webhook)'}")
     return 0
 
+def delete_story(match):
+    """Delete a previously-posted story's Slack message and clear its ch/ts, e.g. to clean up
+    before a --repost. Only works for bot-token posts (webhook posts have no ts to delete)."""
+    state = load_state()
+    hit = next((p for p in reversed((state or {}).get("posted", [])) if match.lower() in p["title"].lower()), None)
+    if not hit or not hit.get("ch") or not hit.get("ts"):
+        log(f"no deletable (bot-token) posted story matching {match!r}")
+        return 1
+    try:
+        slack_api("chat.delete", {"channel": hit["ch"], "ts": hit["ts"]})
+    except Exception as e:
+        log(f"delete failed: {e}")
+        return 1
+    log(f"deleted: {hit['title']}")
+    hit["ch"] = hit["ts"] = None
+    save_state(state)
+    return 0
+
 def collect_feedback(state, t):
     """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
     fb = state.setdefault("feedback", {})
@@ -491,6 +509,7 @@ def _run():
     ap.add_argument("--stub-llm", action="store_true", help="keyword stand-in for testing plumbing")
     ap.add_argument("--feeds-dir", help="read <slug>.xml fixtures from this folder instead of fetching")
     ap.add_argument("--repost", help="repost an already-posted story (matched by title substring) to this run's channel")
+    ap.add_argument("--delete", help="delete a previously-posted story's Slack message (matched by title substring)")
     a = ap.parse_args()
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
@@ -502,6 +521,9 @@ def _run():
 
     if env("BACKFILL_HOURS", "").strip().lower() == "test" and not a.dry_run:
         return test_post()
+
+    if a.delete:
+        return delete_story(a.delete)
 
     if a.repost:
         return repost_story(a.repost)
