@@ -121,6 +121,8 @@ def parse_feed(raw, feed):
                 if is_img:
                     image = u
                     break
+        if feed["name"] == "CoinDesk" and len(items) < 5:
+            log(f"DEBUG CoinDesk image extracted: {image!r} for {title[:60]!r}")
         items.append({
             "id": hashlib.sha1(canonical(link).encode()).hexdigest()[:16],
             "source": feed["name"], "kind": feed.get("kind", "news"),
