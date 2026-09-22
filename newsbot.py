@@ -172,7 +172,9 @@ Rules:
 {{"decisions": [{{"id": "c1", "title_starts": "the first four words of that item's title", "post": true, "priority": 1, "duplicate": false, "reason": "under 12 words"}}]}}
 """
 
-def llm_decide(cands, scope, posted_titles):
+PROMPT_TOKEN_BUDGET = 5500   # len(prompt)//4 estimate; Groq's tightest model caps at 7000 TPM
+
+def llm_decide(cands, scope, bad, good, posted_titles):
     base = env("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/").rstrip("/")
     key = env("LLM_API_KEY")
     if not key: raise RuntimeError("LLM_API_KEY is not set")
@@ -180,12 +182,27 @@ def llm_decide(cands, scope, posted_titles):
     style = env("LLM_API_STYLE", "anthropic" if "api.anthropic.com" in base else "openai")
     max_tokens = int(env("LLM_MAX_TOKENS", "2500"))   # also counts against Groq's tokens-per-minute limit
     batch = int(env("LLM_BATCH", "12"))
+    bad, good, posted_titles = list(bad), list(good), list(posted_titles)   # local, trimmable copies
+    warned = False
 
     def ask(chunk):
+        nonlocal warned
         lines = "\n".join(json.dumps({"id": c["cid"], "source": c["source"],
                                       "title": c["title"], "categories": c["categories"],
                                       "summary": c["summary"][:300]}, ensure_ascii=False) for c in chunk)
-        prompt = PROMPT.format(scope=scope, posted="\n".join(posted_titles) or "(none)", candidates=lines)
+        while True:
+            prompt = PROMPT.format(scope=scope + feedback_text(bad, good),
+                                    posted="\n".join(posted_titles) or "(none)", candidates=lines)
+            est_tokens = len(prompt) // 4
+            if est_tokens <= PROMPT_TOKEN_BUDGET or not (bad or good or len(posted_titles) > 1):
+                break
+            if not warned:
+                log(f"prompt ~{est_tokens} tokens, over the {PROMPT_TOKEN_BUDGET} budget -- "
+                    f"dropping oldest feedback/posted-title context")
+                warned = True
+            if bad: bad.pop()
+            elif good: good.pop()
+            elif len(posted_titles) > 1: posted_titles.pop(0)
         text, last_err = None, None
         for model in models:
             if style == "anthropic":   # native Claude Messages API
@@ -301,10 +318,10 @@ def available_models(base, key, style):
     except Exception as e:
         return f"  | could not list models: {e}"
 
-def stub_decide(cands, scope, posted_titles):
+def stub_decide(cands, scope, bad, good, posted_titles):
     """Keyword stand-in for plumbing tests only. Not the real filter."""
-    good = re.compile(r"lend|credit|vault|stablecoin|tokeniz|sec |exemption|acquir|shut|wind.?down|exploit|hack|raise", re.I)
-    return {c["cid"]: {"post": bool(good.search(c["title"])), "priority": 2, "duplicate": False, "reason": "stub"} for c in cands}
+    rx = re.compile(r"lend|credit|vault|stablecoin|tokeniz|sec |exemption|acquir|shut|wind.?down|exploit|hack|raise", re.I)
+    return {c["cid"]: {"post": bool(rx.search(c["title"])), "priority": 2, "duplicate": False, "reason": "stub"} for c in cands}
 
 # ---------- Slack ----------
 
@@ -517,11 +534,15 @@ def collect_feedback(state, t):
                 fb[p["url"]] = {"title": p["title"], "source": p["source"], "up": up, "down": down, "at": p["at"]}
     for k in [k for k, v in fb.items() if t - v["at"] > FEEDBACK_TTL]: del fb[k]
 
-def feedback_block(state):
-    """Recent team verdicts, appended to the scope so the filter learns from them every run."""
+def feedback_rows(state):
+    """Recent team verdicts, newest first. Capped so this can't grow into the token budget."""
     fb = sorted(state.get("feedback", {}).values(), key=lambda v: -v["at"])
-    bad = [v for v in fb if v["down"] > v["up"]][:15]
-    good = [v for v in fb if v["up"] > v["down"]][:10]
+    bad = [v for v in fb if v["down"] > v["up"]][:8]
+    good = [v for v in fb if v["up"] > v["down"]][:4]
+    return bad, good
+
+def feedback_text(bad, good):
+    """Render feedback rows as scope text, appended so the filter learns from them every run."""
     if not bad and not good: return ""
     out = ["", "", "## Team feedback from the channel (newest first; this outranks the examples above)"]
     if bad:
@@ -629,10 +650,11 @@ def _run():
     if not a.dry_run: collect_feedback(state, t)
     picks = []
     if cands:
-        posted_titles = [f"- {p['title']} ({p['source']})" for p in state["posted"]]
+        posted_titles = [f"- {p['title']} ({p['source']})" for p in state["posted"][-10:]]
+        bad, good = feedback_rows(state)
         try:
             decide = stub_decide if a.stub_llm else llm_decide
-            dec = decide(cands, scope + feedback_block(state), posted_titles)
+            dec = decide(cands, scope, bad, good, posted_titles)
             state["llm_failures"] = 0
         except Exception as e:
             state["llm_failures"] += 1
