@@ -11,8 +11,8 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 ## Tier 1, always post
 
 - **Credit venue events.** Launches, major versions, shutdowns, migrations or governance changes at: Aave, Morpho, Euler, Spark, Sky, Compound, Fluid, Maple, Gearbox, Notional, Term, Ajna, Tenor, Silo, Kamino, Seamless, Summer.fi.
-- **Structured and fixed-rate credit.** Tranching, senior/junior debt onchain, fixed-rate lending, credit ratings for onchain borrowers, undercollateralized/institutional lending desks moving onchain. Lotus's own category -- bar is low.
-- **Exploits and risk events in lending.** Oracle manipulation, bad collateral, liquidation failures, curated vault losses, depegs, stablecoin peg breaks. Mechanism matters more than loss size.
+- **Structured and fixed-rate credit.** Tranching, senior/junior debt, fixed-rate lending, credit ratings for onchain borrowers, undercollateralized/institutional lending desks moving onchain. Lotus's own category -- bar is low.
+- **Exploits and risk events in lending.** Oracle manipulation, bad collateral, liquidation failures, curated vault losses, depegs, peg breaks. Mechanism matters more than loss size.
 - **Curators and risk managers.** Gauntlet, Steakhouse, Re7, kpk, Block Analitica, Sentora, IntoTheBlock, Credora, RedStone, Chaos Labs, MEV Capital, Veda, YO, Superform, vaults.fyi. New mandates, blowups, methodology fights, consolidation, accountability.
 - **Regulation touching lending, vaults, curators, stablecoins or tokenized securities.** SEC, CFTC, OCC, Fed, Treasury, Congress: rules, exemptions, no-action relief, enforcement, a securities-status statement. A finalized action, not a plan, priority or prediction about one -- those are Executive talk (Skip).
 - **Partners and close orbit.** Cicada Partners, Block Analitica, Maven11, FalconX, Credora, RedStone, Arbitrum, Cyfrin.
@@ -36,7 +36,7 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - Roundups, newsletters, podcasts, opinion columns, sponsored posts, small-project press releases.
 - Crime/courts, individuals, no DeFi mechanism: scams, arrests, ransom, gambling charges, CEX hacks.
 - Executive talk: "X says", interviews, remarks, predictions or plans -- includes analyst/VC commentary or rankings about named companies ("X leads the Y race"), even Tier 1/2 names. The action, not the take.
-- Leadership hires/departures, even at Tier 1 protocols. Exception: hiring that's itself the news (a new desk).
+- Leadership hires/departures, even at Tier 1. Exception: hiring that's itself the news (a new desk).
 - ETFs as products: launches, flows, splits, AUM, ticker changes. Exception: a fund itself tokenized/onchain.
 - Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval). Post when final, not each step.
 - More coverage of a thread posted this week without a material new fact. One post per story/week.
