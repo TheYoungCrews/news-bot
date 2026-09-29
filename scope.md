@@ -4,7 +4,7 @@ Plain English, edited by hand. The filter reads this file every run, so changing
 
 ## Who is reading
 
-The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC/ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. Thesis: the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically. Readers already follow crypto Twitter closely -- a story earns a post only if it would change a decision, pitch, risk assumption or competitive read this week. When in doubt, skip.
+The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC/ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. Thesis: the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically. Readers already follow crypto Twitter closely -- a story earns a post only if it'd change a decision, pitch, risk assumption or competitive read this week. When in doubt, skip.
 
 Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main way this bot fails.
 
@@ -13,8 +13,8 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - **Credit venue events.** Launches, major versions, shutdowns, migrations or governance changes at: Aave, Morpho, Euler, Spark, Sky, Compound, Fluid, Maple, Gearbox, Notional, Term, Ajna, Tenor, Silo, Kamino, Seamless, Summer.fi.
 - **Structured and fixed-rate credit.** Tranching, senior/junior debt onchain, fixed-rate lending, credit ratings for onchain borrowers, undercollateralized/institutional lending desks moving onchain. Lotus's own category -- bar is low.
 - **Exploits and risk events in lending.** Oracle manipulation, bad collateral, liquidation failures, curated vault losses, depegs, stablecoin peg breaks. Mechanism matters more than loss size.
-- **Curators and risk managers.** Gauntlet, Steakhouse, Re7, kpk, Block Analitica, Sentora, IntoTheBlock, Credora, RedStone, Chaos Labs, MEV Capital, Veda, YO, Superform, vaults.fyi. New mandates, blowups, methodology fights, consolidation, curator accountability.
-- **Regulation touching lending, vaults, curators, stablecoins or tokenized securities.** SEC, CFTC, OCC, Fed, Treasury, Congress: rules, exemptions, no-action relief, enforcement, an official statement specifically on whether vaults/lending are securities. A finalized action, not a plan, priority or prediction about one -- those are Executive talk (Skip).
+- **Curators and risk managers.** Gauntlet, Steakhouse, Re7, kpk, Block Analitica, Sentora, IntoTheBlock, Credora, RedStone, Chaos Labs, MEV Capital, Veda, YO, Superform, vaults.fyi. New mandates, blowups, methodology fights, consolidation, accountability.
+- **Regulation touching lending, vaults, curators, stablecoins or tokenized securities.** SEC, CFTC, OCC, Fed, Treasury, Congress: rules, exemptions, no-action relief, enforcement, a securities-status statement. A finalized action, not a plan, priority or prediction about one -- those are Executive talk (Skip).
 - **Partners and close orbit.** Cicada Partners, Block Analitica, Maven11, FalconX, Credora, RedStone, Arbitrum, Cyfrin.
 - **M&A and funding** in credit, risk, vault or security infra, any acquirer; ~$10M+ in DeFi, any size in onchain credit/risk/insurance.
 
@@ -22,8 +22,8 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 
 - **Stablecoins and yield-bearing dollars.** Circle, Tether, Ethena, Sky, Paxos, Agora, Falcon, Resolv, Midas: launches, reserve changes, yield mechanics, a bank/fintech issuing its own stablecoin, stablecoin legislation.
 - **RWA and tokenization.** BlackRock, Franklin Templeton, WisdomTree, Apollo, Hamilton Lane, Ondo, Superstate, Securitize, Centrifuge, Grove, Midas: launches, new funds, material plumbing changes (DTCC, Nasdaq).
-- **Institutions arriving onchain.** Banks/brokers/exchanges/asset managers launching lending, custody, settlement, stablecoin or tokenization products, or their own chains, with real volume or a new mechanism: Coinbase, Kraken, Robinhood, Anchorage, Galaxy, Citadel, JPMorgan, Fidelity, Nasdaq. Not a pilot -- see Skip.
-- **Onchain insurance and security.** Nexus Mutual, Firelight, OpenZeppelin, Sherlock, Code4rena, Certora, Cyfrin, Chainlink, Pyth: new coverage/audit/oracle products, acquisitions, incidents, oracle design changes affecting risk. Not a throughput/feature update with no risk angle -- see Skip.
+- **Institutions arriving onchain.** Banks/brokers/exchanges/asset managers launching lending, custody, settlement, stablecoin or tokenization products, or own chains, with real volume/mechanism: Coinbase, Kraken, Robinhood, Anchorage, Galaxy, Citadel, JPMorgan, Fidelity, Nasdaq. Not a pilot -- see Skip.
+- **Onchain insurance and security.** Nexus Mutual, Firelight, OpenZeppelin, Sherlock, Code4rena, Certora, Cyfrin, Chainlink, Pyth: new coverage/audit/oracle products, acquisitions, incidents, risk-relevant oracle changes. Not a feature update with no risk angle -- see Skip.
 - **Original research** on credit market structure, vault risk, liquidation or lending mechanism design, including from the protocols themselves.
 
 ## Skip
@@ -35,13 +35,13 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - Reaction/commentary once the underlying story has posted. One post per story.
 - Roundups, newsletters, podcasts, opinion columns, sponsored posts, small-project press releases.
 - Crime/courts, individuals, no DeFi mechanism: scams, arrests, ransom, gambling charges, CEX hacks.
-- Executive talk: "X says", interviews, remarks, predictions, plans or pilots -- includes analyst/VC commentary or rankings about named companies ("X leads the Y race"), even Tier 1/2 names. The action, not the take.
+- Executive talk: "X says", interviews, remarks, predictions or plans -- includes analyst/VC commentary or rankings about named companies ("X leads the Y race"), even Tier 1/2 names. The action, not the take.
 - Leadership hires/departures, even at Tier 1 protocols. Exception: hiring that's itself the news (a new desk).
 - ETFs as products: launches, flows, splits, AUM, ticker changes. Exception: a fund itself tokenized/onchain.
 - Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval). Post when final, not each step.
 - More coverage of a thread posted this week without a material new fact. One post per story/week.
-- Chain/bridge/messaging infra with no credit or risk angle: L2 upgrades, cross-chain throughput or feature updates, client releases -- even from named security vendors.
-- Routine no-volume integration/pilot news: reselling someone else's stablecoin as "regulated issuer"; an RWA player "joining" another's rails; a bank consortium's deposit pilot, a single bank's first digital bond, or a card network's stablecoin rail; a central bank's own tokenization pilot. Proof-of-concept, happens constantly. Exceptions: the issuer itself launching/changing it, billions-scale volume, a new mechanism, or private-sector plumbing (DTCC, Nasdaq) -- Tier 2.
+- Chain/bridge infra with no credit or risk angle: L2 upgrades, cross-chain throughput/feature updates, client releases -- even from named security vendors.
+- Routine no-volume integration/pilot news: reselling someone else's stablecoin as "regulated issuer"; an RWA player "joining" another's rails; a bank consortium's deposit pilot, a single bank's first digital bond, or a card network's stablecoin rail; a central bank's own tokenization pilot. Proof-of-concept, constant. Exceptions: the issuer launching/changing it, billions-scale volume, a new mechanism, or private plumbing (DTCC, Nasdaq) -- Tier 2.
 
 ## SEC press releases
 
