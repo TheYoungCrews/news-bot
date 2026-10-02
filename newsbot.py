@@ -592,16 +592,34 @@ def post_url(url):
     return 0
 
 def collect_feedback(state, t):
-    """Read the team's thumbs up/down on our recent posts and remember the verdicts."""
+    """Read the team's thumbs up/down on our recent posts and remember the verdicts.
+
+    One unreadable message (deleted, etc.) used to abort the whole run via a bare
+    `break`, silently losing feedback on every post after it forever. Now a bad message
+    is skipped, not fatal -- only 3 reaction-read failures in a row give up for this run.
+    """
     fb = state.setdefault("feedback", {})
     if env("SLACK_BOT_TOKEN"):
+        consecutive_failures = 0
+        skipped = 0
+        gone = []
         for p in state["posted"]:
             if not p.get("ts") or t - p["at"] > FEEDBACK_WINDOW: continue
             try:
                 r = slack_api("reactions.get", params={"channel": p["ch"], "timestamp": p["ts"]})
             except Exception as e:
-                log(f"could not read reactions, skipping feedback this run: {e}")
-                break
+                consecutive_failures += 1
+                skipped += 1
+                if "message_not_found" in str(e):
+                    gone.append(p)   # the message itself is gone, stop retrying it forever
+                else:
+                    log(f"could not read reactions for {p['title']!r}, skipping: {e}")
+                if consecutive_failures >= 3:
+                    log(f"3 consecutive reaction-read failures, giving up on feedback this run "
+                        f"({skipped} post(s) skipped)")
+                    break
+                continue
+            consecutive_failures = 0
             up = down = 0
             for rx in r.get("message", {}).get("reactions", []):
                 name = rx["name"].split("::")[0]          # "+1::skin-tone-3" -> "+1"
@@ -609,6 +627,9 @@ def collect_feedback(state, t):
                 elif name in DOWN: down += rx["count"]
             if up or down:
                 fb[p["url"]] = {"title": p["title"], "source": p["source"], "up": up, "down": down, "at": p["at"]}
+        for p in gone:
+            log(f"message gone (message_not_found), dropping from state.posted: {p['title']}")
+            state["posted"].remove(p)
     for k in [k for k, v in fb.items() if t - v["at"] > FEEDBACK_TTL]: del fb[k]
 
 def feedback_rows(state):

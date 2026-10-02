@@ -3,6 +3,7 @@
 
 Run: python3 -m unittest test_newsbot
 """
+import os
 import unittest
 from datetime import datetime
 
@@ -46,6 +47,46 @@ class TestDuplicateDetection(unittest.TestCase):
         block = "Fed proposes reserve limits, capital standards for stablecoin issuers"
         defiant = "Fed Proposes Capital Charges and Bank Approval Rules for Stablecoins"
         self.assertFalse(newsbot.is_duplicate(block, ts_on("2026-09-25"), defiant, ts_on("2026-10-02"), 0.42))
+
+
+class TestCollectFeedback(unittest.TestCase):
+    def setUp(self):
+        self._orig_slack_api = newsbot.slack_api
+        self._orig_token = os.environ.get("SLACK_BOT_TOKEN")
+        os.environ["SLACK_BOT_TOKEN"] = "xoxb-test"
+
+    def tearDown(self):
+        newsbot.slack_api = self._orig_slack_api
+        if self._orig_token is None:
+            os.environ.pop("SLACK_BOT_TOKEN", None)
+        else:
+            os.environ["SLACK_BOT_TOKEN"] = self._orig_token
+
+    def test_one_bad_message_does_not_block_later_reactions(self):
+        # The middle post's reactions.get raises. Before the break -> continue fix,
+        # a bare `break` would have silently lost feedback on the third post too.
+        t = newsbot.now()
+        posts = [
+            {"title": "Post A", "source": "Test", "url": "https://example.com/a",
+             "at": t - 300, "ch": "C1", "ts": "1.1"},
+            {"title": "Post B", "source": "Test", "url": "https://example.com/b",
+             "at": t - 200, "ch": "C1", "ts": "1.2"},
+            {"title": "Post C", "source": "Test", "url": "https://example.com/c",
+             "at": t - 100, "ch": "C1", "ts": "1.3"},
+        ]
+        state = {"posted": posts, "feedback": {}}
+
+        def fake_slack_api(method, payload=None, params=None):
+            if params["timestamp"] == "1.2":
+                raise RuntimeError("Slack reactions.get: internal_error")
+            return {"ok": True, "message": {"reactions": [{"name": "+1", "count": 2}]}}
+
+        newsbot.slack_api = fake_slack_api
+        newsbot.collect_feedback(state, t)
+
+        self.assertNotIn(posts[1]["url"], state["feedback"])
+        self.assertIn(posts[2]["url"], state["feedback"])
+        self.assertEqual(state["feedback"][posts[2]["url"]]["up"], 2)
 
 
 if __name__ == "__main__":
