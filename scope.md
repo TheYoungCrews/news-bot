@@ -54,3 +54,23 @@ Fixed anchor set -- replace, don't add, if one goes stale.
 Post: "SEC rolls out 'innovation exemption' for tokenized securities venues" (regulatory action)
 
 Skip: "Fed raises rates 25bp" (macro) · "Ava Labs president says NYSE tested Avalanche for tokenization" (executive talk)
+
+<!-- review-log -->
+## Review log
+
+Not sent to the model (`newsbot.py` strips everything from the `<!-- review-log -->` marker
+down before building the filter prompt) -- scope.md is resent on every LLM call, and this
+table only grows, so it can't be in the budget `docs/scope-review.md` enforces. Append one
+row a week; the bot's own Monday Slack recap has the posts/up/down counts to copy in.
+
+| Date | Posts | Up/Down | What changed |
+|---|---|---|---|
+| 2026-09-17 | n/a | n/a | scope.md written; content guidelines drafted and revised |
+| 2026-09-18 | n/a | n/a | Refined posting guidelines |
+| 2026-09-21 | n/a | n/a | Tightened the stablecoin-distribution skip rule; calibrated from a backfill review (RWA plumbing, ECB macro, analyst takes, exec hires) |
+| 2026-09-22 | n/a | n/a | Tightened around that day's downvotes, then an outage: a bug stored the file's own base64 encoding as its content, pushing scope.md past Groq's 7-8K TPM limit -- every filter call failed with HTTP 413. Fixed same day, cut 11,045 -> 5,844 chars |
+| 2026-09-25 | 2 | 0 up / 2 down | The Block's and The Defiant's Fed stablecoin-capital stories both posted and got thumbs down -- a duplicate the title-overlap check missed (0.29 vs the 0.42 cutoff). Fixed 2026-10-02 with a same-day + shared-entity check |
+| 2026-09-26 | n/a | n/a | Tightened "named-official statements" wording to close a real gap |
+| 2026-09-27 | n/a | n/a | Closed the "analyst commentary about named companies" gap |
+| 2026-09-29 | n/a | n/a | Closed the Chainlink infra-vs-security gap, trimmed back to flat size |
+| 2026-10-02 | n/a | n/a | Added the weekly Slack recap (Mondays 13:05 UTC) so reactions have a visible effect; fixed the 9/25 duplicate; added this log |
