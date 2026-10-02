@@ -27,6 +27,8 @@ Environment:
   PREVIEW             card (default) or plain, to post the bare headline + link line
   IMAGE_STYLE         large (default) or thumb
   CARD_COLOR          left bar colour, default #2FFAE2
+  WEEKLY_REVIEW       "1" to run the Monday recap instead of the normal posting run
+                      (same as --weekly-review); read-only, posts no stories
 """
 import argparse, hashlib, html, json, os, re, sys, time, traceback, urllib.error, urllib.request
 import xml.etree.ElementTree as ET
@@ -283,8 +285,37 @@ def title_overlap(a, b):
     if not wa or not wb: return 0.0
     return len(wa & wb) / min(len(wa), len(wb))
 
-def extract_json(text):
-    """Pull the decisions object out of a reply that may be wrapped in prose or fences."""
+def stem(w):
+    """Crude singular form -- just enough to match 'Stablecoins' against 'stablecoin'."""
+    w = w.lower()
+    return w[:-1] if w.endswith("s") and len(w) > 4 else w
+
+def capitalized_entities(t):
+    """Stems of capitalized words in a title -- candidate proper nouns (Fed, Stablecoins)."""
+    return {stem(w) for w in re.findall(r"\b[A-Z][a-zA-Z]+\b", t or "")}
+
+def shared_capitalized_entities(a, b):
+    """Capitalized-word stems from either title that appear, in any case, in both."""
+    wa = {stem(w) for w in re.findall(r"[a-zA-Z0-9]+", a or "")}
+    wb = {stem(w) for w in re.findall(r"[a-zA-Z0-9]+", b or "")}
+    return (capitalized_entities(a) | capitalized_entities(b)) & wa & wb
+
+def same_calendar_day(ts_a, ts_b):
+    to_day = lambda ts: datetime.fromtimestamp(ts, timezone.utc).astimezone(EASTERN).date()
+    return to_day(ts_a) == to_day(ts_b)
+
+def is_duplicate(a_title, a_ts, b_title, b_ts, threshold):
+    """Same-story test: either enough shared significant words, or published the same
+    day while sharing 2+ capitalized entities. The second check catches phrasing that
+    word-overlap alone misses -- sentence case vs title case, singular vs plural -- like
+    the 9/25 Fed/stablecoin duplicate that scored only 0.29 against a 0.42 threshold."""
+    if title_overlap(a_title, b_title) >= threshold:
+        return True
+    return same_calendar_day(a_ts, b_ts) and len(shared_capitalized_entities(a_title, b_title)) >= 2
+
+def extract_json_object(text, predicate=lambda o: True):
+    """Pull the first balanced {...} satisfying predicate out of a reply that may be
+    wrapped in prose or fences."""
     for start in [m.start() for m in re.finditer(r"\{", text or "")]:
         depth, in_str, esc = 0, False, False
         for i in range(start, len(text)):
@@ -303,9 +334,13 @@ def extract_json(text):
                         obj = json.loads(text[start:i + 1])
                     except Exception:
                         break
-                    if isinstance(obj, dict) and "decisions" in obj: return obj
+                    if isinstance(obj, dict) and predicate(obj): return obj
                     break
     return None
+
+def extract_json(text):
+    """Pull the decisions object out of a reply that may be wrapped in prose or fences."""
+    return extract_json_object(text, lambda o: "decisions" in o)
 
 def available_models(base, key, style):
     """On failure, ask the provider which models this key can use, to put in the log."""
@@ -321,6 +356,49 @@ def stub_decide(cands, scope, bad, good, posted_titles):
     """Keyword stand-in for plumbing tests only. Not the real filter."""
     rx = re.compile(r"lend|credit|vault|stablecoin|tokeniz|sec |exemption|acquir|shut|wind.?down|exploit|hack|raise", re.I)
     return {c["cid"]: {"post": bool(rx.search(c["title"])), "priority": 2, "duplicate": False, "reason": "stub"} for c in cands}
+
+def categorize_titles(titles):
+    """Bucket the week's post titles into 5-7 named categories for the weekly review.
+
+    Titles only, no scope.md -- this has to stay far under Groq's 8,000 TPM limit even
+    on a week with dozens of posts. Returns {category: [index,...]} or None on any
+    failure, so the review posts without categories rather than not posting at all.
+    """
+    base = env("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/").rstrip("/")
+    key = env("LLM_API_KEY")
+    if not key: return None
+    models = [m.strip() for m in env("LLM_MODEL", "gemini-flash-latest,gemini-2.5-flash").split(",") if m.strip()]
+    style = env("LLM_API_STYLE", "anthropic" if "api.anthropic.com" in base else "openai")
+    max_tokens = int(env("LLM_MAX_TOKENS", "2500"))
+    numbered = "\n".join(f"{i}: {title}" for i, title in enumerate(titles))
+    prompt = ("Group these news headlines into 5 to 7 named categories.\n\n"
+              f"{numbered}\n\n"
+              'JSON only, no prose: {"Category Name": [0, 2, 5], "Another Category": [1, 3]}')
+    for model in models:
+        try:
+            if style == "anthropic":
+                url = base + "/messages"
+                headers = {"Content-Type": "application/json", "x-api-key": key,
+                           "anthropic-version": "2023-06-01"}
+                payload = {"model": model, "max_tokens": max_tokens, "temperature": 0,
+                           "messages": [{"role": "user", "content": prompt}]}
+                pick = lambda r: r["content"][0]["text"]
+            else:
+                url = base + "/chat/completions"
+                headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+                payload = {"model": model, "max_tokens": max_tokens, "temperature": 0,
+                           "messages": [{"role": "user", "content": prompt}]}
+                def pick(r):
+                    m = r["choices"][0].get("message", {})
+                    return m.get("content") or m.get("reasoning") or ""
+            raw = http(url, data=json.dumps(payload).encode(), headers=headers, timeout=60)
+            text = (pick(json.loads(raw)) or "").strip()
+            cats = extract_json_object(text, lambda o: len(o) > 0)
+            if cats: return cats
+        except Exception as e:
+            log(f"categorization via {model} failed, trying next: {e}")
+    log("categorization failed on every model, posting the weekly review without categories")
+    return None
 
 # ---------- Slack ----------
 
@@ -552,6 +630,77 @@ def feedback_text(bad, good):
         out += [f"- {v['title']} ({v['source']})" for v in good]
     return "\n".join(out)
 
+def weekly_review():
+    """Post a Monday-morning recap of the last 7 days' posts and reactions into #news, so
+    the team can see their thumbs up/down does something. Read-only: never touches
+    state["seen"], never posts a story, and always exits 0 -- a crashing report is worse
+    than no report. Posts via chat.postMessage with the bot token, never the webhook, so
+    this itself never shows up as something to react to."""
+    if not (env("SLACK_BOT_TOKEN") and env("SLACK_CHANNEL_ID")):
+        log("weekly review needs SLACK_BOT_TOKEN + SLACK_CHANNEL_ID, skipping")
+        return 0
+    state = load_state() or {}
+    t = now()
+    week = [p for p in state.get("posted", []) if t - p["at"] <= 7 * 86400]
+    fb = state.get("feedback", {})
+    weekend = datetime.fromtimestamp(t, timezone.utc).astimezone(EASTERN).weekday() >= 5
+    day_cap = env("MAX_POSTS_PER_WEEKEND_DAY", "3") if weekend else env("MAX_POSTS_PER_DAY", "8")
+
+    if not week:
+        text = f":bar_chart: *Weekly review* -- no posts in the last 7 days (cap: {day_cap}/day)."
+    else:
+        by_day = {}
+        for p in week:
+            d = datetime.fromtimestamp(p["at"], timezone.utc).astimezone(EASTERN).date()
+            by_day[d] = by_day.get(d, 0) + 1
+        per_day = ", ".join(f"{d.strftime('%a %m/%d')}: {c}" for d, c in sorted(by_day.items()))
+
+        rated = [p for p in week if p["url"] in fb]
+        unrated = [p for p in week if p["url"] not in fb]
+        up = sum(1 for p in rated if fb[p["url"]]["up"] > fb[p["url"]]["down"])
+        down = sum(1 for p in rated if fb[p["url"]]["down"] > fb[p["url"]]["up"])
+        top = sorted((p for p in rated if fb[p["url"]]["up"] > 0), key=lambda p: -fb[p["url"]]["up"])[:3]
+        webhook_only = [p for p in week if not p.get("ts")]
+
+        lines = [
+            f":bar_chart: *Weekly review* -- {len(week)} posts over the last 7 days (cap: {day_cap}/day)",
+            f"Per day: {per_day}",
+            f"Reactions: {len(rated)}/{len(week)} got a reaction ({up} up, {down} down)",
+        ]
+        if webhook_only:
+            lines.append(f":warning: {len(webhook_only)} post(s) went out via the webhook, "
+                         f"so reactions on them were never tracked")
+
+        categories = categorize_titles([p["title"] for p in week])
+        if categories:
+            lines += ["", "*Categories:*"]
+            lines += [f"- {name}: {len(idx)}" for name, idx in categories.items()]
+
+        if top:
+            lines += ["", "*Top keeps:*"]
+            lines += [f"- <{p['url']}|{slack_escape(p['title'])}> (+{fb[p['url']]['up']})" for p in top]
+
+        head = "\n".join(lines)
+        text = head
+        if unrated:
+            header = "\n\n*No reaction yet -- react :+1: or :-1::*"
+            more_note_budget = 60   # room for "- _(+N more -- see the channel for the rest)_"
+            budget = 2000 - len(head) - len(header) - more_note_budget
+            rows, shown = [], 0
+            for p in unrated:
+                row = f"\n- <{p['url']}|{slack_escape(p['title'])}>"
+                if sum(len(r) for r in rows) + len(row) > budget: break
+                rows.append(row); shown += 1
+            more = len(unrated) - shown
+            if more: rows.append(f"\n- _(+{more} more -- see the channel for the rest)_")
+            text = head + header + "".join(rows)
+
+    try:
+        slack_api("chat.postMessage", {"channel": env("SLACK_CHANNEL_ID"), "text": text[:2000]})
+    except Exception as e:
+        log(f"weekly review post failed: {e}")
+    return 0
+
 # ---------- main ----------
 
 def _run():
@@ -563,9 +712,14 @@ def _run():
     ap.add_argument("--repost", help="repost an already-posted story (matched by title substring) to this run's channel")
     ap.add_argument("--delete", help="delete a previously-posted story's Slack message (matched by title substring)")
     ap.add_argument("--post-url", help="find this exact story URL in the live feeds and post it now, bypassing the LLM filter")
+    ap.add_argument("--weekly-review", action="store_true",
+                     help="post the Monday recap of the week's posts and reactions; read-only, posts no stories")
     a = ap.parse_args()
     if a.backfill_hours and not a.dry_run:
         sys.exit("--backfill-hours only works with --dry-run (it would repost stories already in the channel)")
+
+    if a.weekly_review or env("WEEKLY_REVIEW", "").lower() in ("1", "true", "yes"):
+        return weekly_review()
 
     if env("PAUSED", "").lower() in ("1", "true", "yes"):
         # kill switch: set the PAUSED repo variable to stop posting without touching code
@@ -602,6 +756,7 @@ def _run():
 
     with open(os.path.join(ROOT, "feeds.json")) as f: feeds = [x for x in json.load(f)["feeds"] if x.get("enabled", True)]
     with open(os.path.join(ROOT, "scope.md")) as f: scope = f.read()
+    scope = scope.split("<!-- review-log -->", 1)[0].rstrip()   # history table below is not sent to the LLM
     state = load_state()
     first_run = (state is None and not a.backfill_hours) or holding
     state = state or {"seen": {}, "posted": [], "llm_failures": 0, "feed_failures": {}, "alerts": {}}
@@ -678,20 +833,21 @@ def _run():
                 else: state["seen"][c["id"]] = t
             picks.sort(key=lambda x: (x[0], x[1]["ts"]))
             # the model only sees one batch at a time, so catch duplicates across batches here
+            dupe_threshold = float(env("DUPE_THRESHOLD", "0.42"))
             deduped = []
             for _, c in picks:
                 twin = next((k for k in deduped
-                             if title_overlap(c["title"], k["title"]) >= float(env("DUPE_THRESHOLD", "0.42"))), None)
+                             if is_duplicate(c["title"], c["ts"], k["title"], k["ts"], dupe_threshold)), None)
                 if twin:
                     log(f"same story as {twin['source']}'s, dropping: {c['title']}")
                     state["seen"][c["id"]] = t
                     continue
                 deduped.append(c)
             # don't repeat a story we already posted in the last week
-            recent = [p["title"] for p in state["posted"]]
+            recent = [(p["title"], p["at"]) for p in state["posted"]]
             fresh = []
             for c in deduped:
-                twin = next((r for r in recent if title_overlap(c["title"], r) >= float(env("DUPE_THRESHOLD", "0.42"))), None)
+                twin = next((r for r in recent if is_duplicate(c["title"], c["ts"], r[0], r[1], dupe_threshold)), None)
                 if twin:
                     log(f"already covered this week, dropping: {c['title']}")
                     state["seen"][c["id"]] = t

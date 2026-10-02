@@ -7,8 +7,13 @@ past Groq's 7,000-8,000 tokens-per-minute cap, and every filter call started fai
 HTTP 413.
 
 **Budget: scope.md stays well under 7,000 characters.** Not "at" the budget -- comfortably
-under it, so normal editing doesn't need a rescue trim. Check with `wc -c scope.md`. As of
-2026-09-22 it's ~5,800.
+under it, so normal editing doesn't need a rescue trim. As of 2026-09-22 it's ~5,800.
+
+The budget is on what actually gets sent, not the file's byte count: `newsbot.py` splits
+scope.md on the `<!-- review-log -->` marker and only sends what's above it to the LLM. The
+review log below that marker (date, posts, up/down, what changed, added 2026-10-02) is meant
+to grow every week, so it's exempt -- `wc -c scope.md` now overstates the real budget, check
+`sed -n '1,/<!-- review-log -->/p' scope.md | wc -c` instead.
 
 ## The rule for every future edit, including the automated review
 

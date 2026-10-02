@@ -1,10 +1,16 @@
 name: news-bot
 
 on:
-  # No `schedule:` trigger here on purpose. GitHub's own cron was unreliable (missed
-  # runs, hours-late weekend runs) -- an external scheduler now calls workflow_dispatch
-  # directly instead, on the same cadence this used to run on. Re-adding `schedule:`
-  # here would double-post alongside it.
+  # No `schedule:` trigger for the normal posting run, on purpose. GitHub's own cron was
+  # unreliable (missed runs, hours-late weekend runs) -- an external scheduler calls
+  # workflow_dispatch directly instead, on the same cadence this used to run on.
+  # Re-adding a `schedule:` for the normal run here would double-post alongside it.
+  #
+  # The weekly review is different: it's read-only (no state["seen"] writes, no story
+  # posts), so a missed or doubled run costs nothing worse than a repeated Slack message,
+  # and native `schedule:` is fine for it.
+  schedule:
+    - cron: "5 13 * * 1"   # Monday 13:05 UTC
   workflow_dispatch:
     inputs:
       dry_run:
@@ -23,6 +29,10 @@ on:
       post_url:
         description: "Find this exact story URL in the live feeds and post it now, bypassing the LLM filter"
         default: ""
+      weekly_review:
+        description: "Post the Monday recap of the week's posts and reactions instead of the normal run"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -77,6 +87,9 @@ jobs:
           REPOST: ${{ inputs.repost }}
           DELETE: ${{ inputs.delete }}
           POST_URL: ${{ inputs.post_url }}
+          # the Monday schedule and the weekly_review dispatch input both mean: run the
+          # recap only, not the normal posting path (newsbot.py checks this before anything else)
+          WEEKLY_REVIEW: ${{ (github.event_name == 'schedule' || inputs.weekly_review == true) && '1' || '' }}
         run: |
           ARGS=()
           if [ -n "$DELETE" ]; then
@@ -92,7 +105,9 @@ jobs:
           python3 newsbot.py "${ARGS[@]}"
 
       - name: Save state to the bot-state branch
-        if: always() && inputs.dry_run != true && hashFiles('state/seen.json') != ''
+        # the weekly review is read-only and must never write state, even if it somehow
+        # produced a state/seen.json locally
+        if: always() && inputs.dry_run != true && github.event_name != 'schedule' && inputs.weekly_review != true && hashFiles('state/seen.json') != ''
         run: |
           cp state/seen.json /tmp/seen.json
           git config user.name "news-bot"
