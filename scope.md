@@ -1,10 +1,11 @@
+
 # What belongs in #news
 
 Plain English, edited by hand. The filter reads this file every run, so changing a line here changes what posts. No code changes needed.
 
 ## Who is reading
 
-The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC/ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. Thesis: the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically. Readers already follow crypto Twitter closely -- a story earns a post only if it'd change a decision, pitch, risk assumption or competitive read this week. When in doubt, skip.
+The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC/ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. Thesis: the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically. Readers already follow crypto Twitter closely -- a story earns a post only if it'd change a decision, pitch, risk assumption or competitive read this week.
 
 Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main way this bot fails.
 
@@ -38,7 +39,7 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - Executive talk: "X says", interviews, remarks, predictions or plans -- includes analyst/VC commentary or rankings about named companies ("X leads the Y race"), even Tier 1/2 names. The action, not the take.
 - Leadership hires/departures, even at Tier 1. Exception: hiring that's itself the news (a new desk).
 - ETFs as products: launches, flows, splits, AUM, ticker changes. Exception: a fund itself tokenized/onchain.
-- Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval). Post when final, not each step.
+- Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval, a proposal). Post when final, not each step.
 - More coverage of a thread posted this week without a material new fact. One post per story/week.
 - Chain/bridge infra with no credit or risk angle: L2 upgrades, cross-chain throughput/feature updates, client releases -- even from named security vendors.
 - Routine no-volume integration/pilot news: reselling someone else's stablecoin as "regulated issuer"; an RWA player "joining" another's rails; a bank consortium's deposit pilot, a single bank's first digital bond, or a card network's stablecoin rail; a central bank's own tokenization pilot. Proof-of-concept, constant. Exceptions: the issuer launching/changing it, billions-scale volume, a new mechanism, or private plumbing (DTCC, Nasdaq) -- Tier 2.
@@ -74,3 +75,4 @@ row a week; the bot's own Monday Slack recap has the posts/up/down counts to cop
 | 2026-09-27 | n/a | n/a | Closed the "analyst commentary about named companies" gap |
 | 2026-09-29 | n/a | n/a | Closed the Chainlink infra-vs-security gap, trimmed back to flat size |
 | 2026-10-02 | n/a | n/a | Added the weekly Slack recap (Mondays 13:05 UTC) so reactions have a visible effect; fixed the 9/25 duplicate; added this log |
+| 2026-10-05 | 34 | 9 up / 9 down | Added "a proposal" to the procedural-steps Skip rule -- "Fed/ESMA proposes a rule" and "administration weighs a plan" kept posting as finalized actions (4 down-votes, 9/24-9/30); paid for it by cutting "When in doubt, skip." from the intro |
