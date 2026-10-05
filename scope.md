@@ -1,4 +1,3 @@
-
 # What belongs in #news
 
 Plain English, edited by hand. The filter reads this file every run, so changing a line here changes what posts. No code changes needed.
