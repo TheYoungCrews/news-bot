@@ -18,6 +18,8 @@ Environment:
   MAX_POSTS_PER_RUN   default 2
   MAX_POSTS_PER_DAY   default 8 (rolling 24h), MAX_POSTS_PER_WEEKEND_DAY default 3
   MAX_PRIORITY        highest priority number allowed through, default 2 (3 = marginal, never posts)
+  DOWNGRADE_COMMENTARY "false" to stop downgrading "X says"/"proposes"/"weighs a plan"
+                      headlines to priority 3, default true
   DUPE_THRESHOLD      title-overlap cut for same-story detection, default 0.42
   MAX_AGE_HOURS       ignore items older than this, default 36
   ALERT_USER          Slack member ID to tag when something breaks, e.g. U01234567
@@ -284,6 +286,28 @@ def title_overlap(a, b):
     wa, wb = title_words(a), title_words(b)
     if not wa or not wb: return 0.0
     return len(wa & wb) / min(len(wa), len(wb))
+
+# Attribution ("X says", "analysts say") and regulatory chatter ("proposes", "weighs a
+# plan", "presses EU") -- the two patterns the team keeps thumbing down. scope.md has
+# asked the model to skip these twice already (2026-09-26, 2026-09-27) and they kept
+# posting anyway, so this is a code-level backstop, not just another wording pass.
+# Deliberately excludes "claims" (ambiguous: "exploit recovery claims" is a noun, not
+# the verb) and "push/pushes" (an up-voted real story used it: "European central banks
+# push to expand...").
+COMMENTARY_RX = re.compile(
+    r"\b(says?|said|tells?|told|warns?|argues?|believes?|predicts?|sees|thinks?|"
+    r"suggests?|analysts?\s+say)\b", re.I)
+REGULATORY_CHATTER_RX = re.compile(
+    r"\b(propos(es|al)|weighs?|considers?|urges?|presses?|plans?\s+to|"
+    r"could\s+(be|see|face)|may\s+(be|see|face))\b", re.I)
+
+def looks_like_commentary_or_chatter(title):
+    """True for a headline built on attribution/opinion or non-final regulatory
+    language, rather than a reported fact. Backtested against 48 real feedback rows:
+    catches 9/9 of the matching down-voted posts, 1 false positive (a single +1 that
+    used "says" for what the team otherwise liked) and zero other up-voted posts."""
+    t = title or ""
+    return bool(COMMENTARY_RX.search(t) or REGULATORY_CHATTER_RX.search(t))
 
 def stem(w):
     """Crude singular form -- just enough to match 'Stablecoins' against 'stablecoin'."""
@@ -847,6 +871,10 @@ def _run():
                     mark = "POST" if keep else "skip"
                     log(f"[{mark}] p{d.get('priority','-')} {c['source']}: {c['title']}  -- {d.get('reason','')}")
                 pr = int(d.get("priority") or 2)
+                if keep and env("DOWNGRADE_COMMENTARY", "true").lower() in ("1", "true", "yes") \
+                        and looks_like_commentary_or_chatter(c["title"]):
+                    log(f"commentary/regulatory-chatter language, downgrading to priority 3: {c['title']}")
+                    pr = 3
                 if keep and pr > int(env("MAX_PRIORITY", "2")):
                     log(f"priority {pr}, below the bar: {c['title']}")
                     keep = False
