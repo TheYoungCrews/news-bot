@@ -6,7 +6,7 @@ Plain English, edited by hand. The filter reads this file every run, so changing
 
 The Lotus Labs team: an institutional onchain credit market, pre-launch. BTC/ETH balance-sheet borrowing first, RWA credit next with Cicada Partners as first vault manager. Thesis: the "missing middle" of DeFi credit, between isolated pools and pooled risk, priced probabilistically. Readers already follow crypto Twitter closely -- a story earns a post only if it'd change a decision, pitch, risk assumption or competitive read this week.
 
-Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main way this bot fails.
+Room for up to 6 posts a DAY, fewer at weekends. Flooding the channel is the main way this bot fails.
 
 ## Tier 1, always post
 
@@ -14,7 +14,6 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - **Structured and fixed-rate credit.** Tranching, senior/junior debt, fixed-rate lending, credit ratings for onchain borrowers, undercollateralized/institutional lending desks moving onchain. Lotus's own category -- bar is low.
 - **Exploits and risk events in lending.** Oracle manipulation, bad collateral, liquidation failures, curated vault losses, depegs, peg breaks. Mechanism matters more than loss size.
 - **Curators and risk managers.** Gauntlet, Steakhouse, Re7, kpk, Block Analitica, Sentora, IntoTheBlock, Credora, RedStone, Chaos Labs, MEV Capital, Veda, YO, Superform, vaults.fyi. New mandates, blowups, methodology fights, consolidation, accountability.
-- **Regulation touching lending, vaults, curators, stablecoins or tokenized securities.** SEC, CFTC, OCC, Fed, Treasury, Congress: rules, exemptions, no-action relief, enforcement, a securities-status statement. A finalized action, not a plan, priority or prediction about one -- those are Executive talk (Skip).
 - **Partners and close orbit.** Cicada Partners, Block Analitica, Maven11, FalconX, Credora, RedStone, Arbitrum, Cyfrin.
 - **M&A and funding** in credit, risk, vault or security infra, any acquirer; ~$10M+ in DeFi, any size in onchain credit/risk/insurance.
 
@@ -25,20 +24,21 @@ Room for 5-8 posts a DAY, fewer at weekends. Flooding the channel is the main wa
 - **Institutions arriving onchain.** Banks/brokers/exchanges/asset managers launching lending, custody, settlement, stablecoin or tokenization products, or own chains, with real volume/mechanism: Coinbase, Kraken, Robinhood, Anchorage, Galaxy, Citadel, JPMorgan, Fidelity, Nasdaq. Not a pilot -- see Skip.
 - **Onchain insurance and security.** Nexus Mutual, Firelight, OpenZeppelin, Sherlock, Code4rena, Certora, Cyfrin, Chainlink, Pyth: new coverage/audit/oracle products, acquisitions, incidents, risk-relevant oracle changes. Not a feature update with no risk angle -- see Skip.
 - **Original research** on credit market structure, vault risk, liquidation or lending mechanism design, including from the protocols themselves.
+- **Regulation touching lending, vaults, curators, stablecoins or tokenized securities.** SEC, CFTC, OCC, Fed, Treasury, Congress: a finalized rule, exemption, no-action relief or enforcement action. Not a proposal, statement, lawsuit, lobbying or procedural step -- Skip, however material-sounding.
 
 ## Skip
 
-- Prices, market recaps, "BTC hits X", liquidation tallies, ETF flows, derivatives positioning, "analyst says", technical analysis, predictions.
+- Prices, market recaps, "BTC hits X", liquidation tallies, ETF flows, derivatives positioning, technical analysis, predictions.
 - Macro/tradfi: Fed decisions, rate moves, equities, jobs numbers, oil -- even tied to crypto prices.
 - Memecoins, NFTs, gaming, celebrity/politician tokens, launchpads, airdrops, points, exchange listings.
 - Bitcoin mining, corporate BTC treasury buys, reserve bills.
 - Reaction/commentary once the underlying story has posted. One post per story.
 - Roundups, newsletters, podcasts, opinion columns, sponsored posts, small-project press releases.
 - Crime/courts, individuals, no DeFi mechanism: scams, arrests, ransom, gambling charges, CEX hacks.
-- Executive talk: "X says", interviews, remarks, predictions or plans -- includes analyst/VC commentary or rankings about named companies ("X leads the Y race"), even Tier 1/2 names. The action, not the take.
+- Executive talk and analyst commentary: "X says/sees/warns/believes", interviews, remarks, predictions, plans, or rankings about named companies, even Tier 1/2 names. Test: delete the speaker and the quote -- if no fact is left, skip.
 - Leadership hires/departures, even at Tier 1. Exception: hiring that's itself the news (a new desk).
 - ETFs as products: launches, flows, splits, AUM, ticker changes. Exception: a fund itself tokenized/onchain.
-- Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval, a proposal). Post when final, not each step.
+- Procedural regulatory steps (review, comment period, agenda item, vote, preliminary approval). Post when final, not each step.
 - More coverage of a thread posted this week without a material new fact. One post per story/week.
 - Chain/bridge infra with no credit or risk angle: L2 upgrades, cross-chain throughput/feature updates, client releases -- even from named security vendors.
 - Routine no-volume integration/pilot news: reselling someone else's stablecoin as "regulated issuer"; an RWA player "joining" another's rails; a bank consortium's deposit pilot, a single bank's first digital bond, or a card network's stablecoin rail; a central bank's own tokenization pilot. Proof-of-concept, constant. Exceptions: the issuer launching/changing it, billions-scale volume, a new mechanism, or private plumbing (DTCC, Nasdaq) -- Tier 2.
@@ -75,3 +75,4 @@ row a week; the bot's own Monday Slack recap has the posts/up/down counts to cop
 | 2026-09-29 | n/a | n/a | Closed the Chainlink infra-vs-security gap, trimmed back to flat size |
 | 2026-10-02 | n/a | n/a | Added the weekly Slack recap (Mondays 13:05 UTC) so reactions have a visible effect; fixed the 9/25 duplicate; added this log |
 | 2026-10-05 | 34 | 9 up / 9 down | Added "a proposal" to the procedural-steps Skip rule -- "Fed/ESMA proposes a rule" and "administration weighs a plan" kept posting as finalized actions (4 down-votes, 9/24-9/30); paid for it by cutting "When in doubt, skip." from the intro |
+| 2026-10-06 | n/a | n/a | Serious tightening on regulation and commentary, which kept getting through and downvoted despite two prior wording fixes (9/26, 9/27): moved Regulation from Tier 1 (always post) to Tier 2 (must be substantive) and required a *finalized* rule/enforcement action, not a proposal/statement/lawsuit/lobbying position; rewrote the executive-talk Skip rule around a concrete test ("delete the speaker and the quote -- if no fact is left, skip"); also added a code-level backstop in newsbot.py (`looks_like_commentary_or_chatter`) that downgrades "X says"/"proposes"/"weighs a plan" headlines to priority 3 regardless of what the model decides, since prompt wording alone hadn't held for this pattern |

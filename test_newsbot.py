@@ -49,6 +49,47 @@ class TestDuplicateDetection(unittest.TestCase):
         self.assertFalse(newsbot.is_duplicate(block, ts_on("2026-09-25"), defiant, ts_on("2026-10-02"), 0.42))
 
 
+class TestCommentaryFilter(unittest.TestCase):
+    # Real titles from state.feedback, 2026-09-21 through 2026-10-04.
+    DOWN_VOTED_SHOULD_CATCH = [
+        "ESMA Proposes MiCA Rules for DeFi Gateways, Staking and Lending",
+        "Fed Proposes Capital Charges and Bank Approval Rules for Stablecoins",
+        "BlackRock Sees Stablecoins Powering AI Agent Payments",
+        "Coinbase, Robinhood, Circle could be early winners of SEC's tokenized-stock push, analysts say",
+        "Binance deal gives Circle a boost in stablecoin race with Tether, analysts say",
+        "Trump administration weighs a global stablecoin plan to cement dollar's dominance",
+        "CFTC Chairman Selig says markets must prepare for 'mass tokenization'",
+        "Fed proposes reserve limits, capital standards for stablecoin issuers under GENIUS Act",
+        "BitGo CEO says Clarity's failure left capital markets exposed to risk potentially worse than Lehman",
+    ]
+    # Real up-voted titles the filter must leave alone.
+    UP_VOTED_MUST_NOT_CATCH = [
+        "Aave Adds Coinbase Stock Tokens as Collateral on Base",
+        "Sentora Seeks Aave V4 Markets With 50% Revenue Share for DAO",
+        "Balancer Holders Approve Wind-Down, Reject Official Fork",
+        "Galaxy Adds $100 Million of sUSDS to Treasury, Approves It as Loan Collateral",
+        "Coinbase adds fixed-rate bitcoin-backed loans through Morpho Midnight",
+        "European central banks push to expand stablecoin yield ban to crypto lending and staking",
+        "Drift opens exploit recovery claims with initial payouts of just over 1% of user losses",
+    ]
+
+    def test_catches_known_down_voted_commentary_and_chatter(self):
+        for title in self.DOWN_VOTED_SHOULD_CATCH:
+            with self.subTest(title=title):
+                self.assertTrue(newsbot.looks_like_commentary_or_chatter(title))
+
+    def test_leaves_known_up_voted_posts_alone(self):
+        for title in self.UP_VOTED_MUST_NOT_CATCH:
+            with self.subTest(title=title):
+                self.assertFalse(newsbot.looks_like_commentary_or_chatter(title))
+
+    def test_claims_as_a_noun_is_not_attribution(self):
+        # "exploit recovery claims" is a noun phrase, not the verb "X claims Y" --
+        # regression check for the false positive this exact title triggered in testing.
+        self.assertFalse(newsbot.looks_like_commentary_or_chatter(
+            "Drift opens exploit recovery claims with initial payouts of just over 1% of user losses"))
+
+
 class TestCollectFeedback(unittest.TestCase):
     def setUp(self):
         self._orig_slack_api = newsbot.slack_api
