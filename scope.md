@@ -80,3 +80,4 @@ row a week; the bot's own Monday Slack recap has the posts/up/down counts to cop
 | 2026-10-19 | 31 | 3 up / 2 down | No edit -- only 3 down-votes all week, no pattern repeated twice. Two to watch: "Kraken Plans UAE Launch..." (bare "Plans" without "to" slips past the commentary regex -- 1 so far) and "Dutch central bank grants Qivalis e-money license..." (a finalized but immaterial grant to an unlisted issuer -- 1 so far) |
 | 2026-10-26 | 32 | 3 up / 0 down | No edit -- zero down-votes all week. Both watch items from 10/19 stayed at 1 occurrence each, no third pattern emerged |
 | 2026-11-02 | 31 | 1 up / 1 down | No edit -- only 1 down-vote ("X100 Exploiter Sends 420.8 ETH to Tornado Cash", a post-exploit fund-tracking story, not a lending exploit itself -- single occurrence, not a repeat) |
+| 2026-11-09 | 33 | 4 up / 0 down | No edit -- zero down-votes all week. Both open watch items (bare "Plans", minor-issuer license grants) still at 1 occurrence each |
