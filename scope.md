@@ -82,3 +82,4 @@ row a week; the bot's own Monday Slack recap has the posts/up/down counts to cop
 | 2026-11-02 | 31 | 1 up / 1 down | No edit -- only 1 down-vote ("X100 Exploiter Sends 420.8 ETH to Tornado Cash", a post-exploit fund-tracking story, not a lending exploit itself -- single occurrence, not a repeat) |
 | 2026-11-09 | 33 | 4 up / 0 down | No edit -- zero down-votes all week. Both open watch items (bare "Plans", minor-issuer license grants) still at 1 occurrence each |
 | 2026-11-16 | 29 | 4 up / 0 down | No edit -- zero down-votes again. Both watch items unchanged at 1 occurrence each; six weeks of a stable or improving down-vote rate since the regulation/commentary tightening (10/06) |
+| 2026-11-23 | 31 | 3 up / 0 down | No edit -- zero down-votes again, seventh clean week. Watch items still at 1 occurrence each |
